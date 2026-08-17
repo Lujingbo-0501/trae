@@ -20,6 +20,40 @@
         .workorder-rejected { border-left: 4px solid #ef4444; }
         .workorder-done { border-left: 4px solid #3b82f6; }
         .progress-bar { transition: width 0.5s ease; }
+        .ai-fab { position:fixed; bottom:24px; right:24px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#667eea,#764ba2); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 12px rgba(102,126,234,0.4); z-index:1000; transition:transform 0.2s; font-size:24px; }
+        .ai-fab:hover { transform:scale(1.1); }
+        .ai-fab.has-notification::after { content:''; position:absolute; top:8px; right:8px; width:12px; height:12px; background:#ef4444; border-radius:50%; border:2px solid white; }
+        .ai-panel { position:fixed; bottom:90px; right:24px; width:420px; max-width:calc(100vw - 48px); max-height:600px; background:white; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,0.15); z-index:1001; display:flex; flex-direction:column; overflow:hidden; transform-origin:bottom right; transition:all 0.3s ease; transform:scale(0); opacity:0; pointer-events:none; }
+        .ai-panel.open { transform:scale(1); opacity:1; pointer-events:auto; }
+        .ai-panel-header { background:linear-gradient(135deg,#667eea,#764ba2); color:white; padding:16px; display:flex; justify-content:space-between; align-items:center; }
+        .ai-messages { flex:1; overflow-y:auto; padding:16px; max-height:420px; }
+        .ai-msg { margin-bottom:12px; display:flex; gap:8px; }
+        .ai-msg.user { flex-direction:row-reverse; }
+        .ai-msg-avatar { width:32px; height:32px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:16px; }
+        .ai-msg.ai .ai-msg-avatar { background:linear-gradient(135deg,#667eea,#764ba2); color:white; }
+        .ai-msg.user .ai-msg-avatar { background:#e5e7eb; color:#374151; }
+        .ai-msg-bubble { max-width:280px; padding:10px 14px; border-radius:16px; font-size:14px; line-height:1.5; }
+        .ai-msg.ai .ai-msg-bubble { background:#f3f4f6; color:#1f2937; border-bottom-left-radius:4px; }
+        .ai-msg.user .ai-msg-bubble { background:linear-gradient(135deg,#667eea,#764ba2); color:white; border-bottom-right-radius:4px; }
+        .ai-msg-bubble .data-card { background:white; border-radius:8px; padding:10px; margin-top:8px; font-size:13px; }
+        .ai-quick-actions { padding:8px 16px; border-top:1px solid #f3f4f6; display:flex; gap:6px; flex-wrap:wrap; }
+        .ai-quick-btn { padding:6px 12px; background:#f3f4f6; border:none; border-radius:16px; font-size:12px; cursor:pointer; color:#4b5563; transition:background 0.2s; white-space:nowrap; }
+        .ai-quick-btn:hover { background:#e5e7eb; }
+        .ai-input-area { padding:12px 16px; border-top:1px solid #f3f4f6; display:flex; gap:8px; }
+        .ai-input { flex:1; padding:10px 14px; border:1px solid #e5e7eb; border-radius:24px; outline:none; font-size:14px; transition:border-color 0.2s; }
+        .ai-input:focus { border-color:#667eea; }
+        .ai-send-btn { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#667eea,#764ba2); color:white; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; }
+        .task-card { border:1px solid #e5e7eb; border-radius:8px; padding:12px; margin-top:8px; background:#fafafa; }
+        .task-card-title { font-weight:600; font-size:13px; margin-bottom:6px; }
+        .task-card-btn { margin-top:8px; padding:6px 14px; background:#f59e0b; color:white; border:none; border-radius:6px; font-size:12px; cursor:pointer; }
+        .task-card-btn:hover { background:#d97706; }
+        .typing-indicator { display:inline-flex; gap:4px; padding:4px 0; }
+        .typing-dot { width:8px; height:8px; background:#9ca3af; border-radius:50%; animation:typing 1.4s infinite; }
+        .typing-dot:nth-child(2) { animation-delay:0.2s; }
+        .typing-dot:nth-child(3) { animation-delay:0.4s; }
+        @keyframes typing { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-8px)} }
+        .quick-question { cursor:pointer; color:#667eea; text-decoration:underline; }
+        .quick-question:hover { color:#764ba2; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -212,8 +246,28 @@
         </div>
     </div>
 
+    <div id="aiFab" class="ai-fab" onclick="toggleAI()">🤖</div>
+
+    <div id="aiPanel" class="ai-panel">
+        <div class="ai-panel-header">
+            <div>
+                <div class="font-semibold">🤖 库存智能助手</div>
+                <div class="text-xs opacity-80">对话式查询 · 策略制定 · 任务创建</div>
+            </div>
+            <button onclick="toggleAI()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center">×</button>
+        </div>
+        <div class="ai-messages" id="aiMessages"></div>
+        <div class="ai-quick-actions" id="aiQuickActions"></div>
+        <div class="ai-input-area">
+            <input type="text" id="aiInput" class="ai-input" placeholder="问我任何关于库存的问题..." onkeypress="if(event.key==='Enter')sendAIMsg()">
+            <button onclick="sendAIMsg()" class="ai-send-btn">➤</button>
+        </div>
+    </div>
+
     <script>
     let inventoryData = [];
+    let aiOpen = false;
+    let aiContext = {};
     let workorders = [];
     let storeParams = {};
     let params = { low: 30, healthy: 50, high: 80, weights: { turnover: 40, profile: 30, trend: 20, strategy: 10 } };
@@ -677,8 +731,8 @@
         const effective = completed.filter(w=>w.feedback==='effective'||w.feedback==='partial').length;
         document.getElementById('woAccuracy').textContent = completed.length? Math.round(effective/completed.length*100)+'%':'-';
 
-        const typeIcon = {capacity:'📐',allocation:'🔄',strategy:'💡'};
-        const typeName = {capacity:'库位规划',allocation:'车辆调拨',strategy:'运营策略'};
+        const typeIcon = {capacity:'📐',allocation:'🔄',strategy:'💡',alert:'🚨'};
+        const typeName = {capacity:'库位规划',allocation:'车辆调拨',strategy:'运营策略',alert:'预警通知'};
         const listEl = document.getElementById('workorderList');
         if(!list.length) { listEl.innerHTML='<p class="text-gray-400 text-center py-8">暂无工单</p>'; return; }
         listEl.innerHTML = list.map(w=>{
@@ -699,17 +753,19 @@
                     </span>
                     ${w.result?`<span class="text-gray-500 ml-2">${w.result}</span>`:''}
                 </div>` : `<div class="mt-2 text-sm text-red-600">已驳回</div>`;
+            const integration = w.type==='allocation'?'对接：车辆调拨系统':w.type==='alert'?'对接：企业微信/钉钉通知门店负责人':w.type==='capacity'?'对接：库位租赁管理系统':'';
             return `<div class="${sc} rounded-lg p-4">
                 <div class="flex justify-between items-start">
                     <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
+                        <div class="flex items-center gap-2 mb-1 flex-wrap">
                             <span>${typeIcon[w.type]}</span>
                             <span class="text-xs px-2 py-0.5 rounded bg-white border">${typeName[w.type]}</span>
                             <span class="text-xs text-gray-500">${w.createdAt}</span>
                             <span class="text-xs text-gray-500">门店: ${w.store}</span>
+                            ${integration?`<span class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">🔗 ${integration}</span>`:''}
                         </div>
                         <h4 class="font-semibold text-gray-800">${w.title}</h4>
-                        <p class="text-sm text-gray-600 mt-1">${w.desc}</p>
+                        <p class="text-sm text-gray-600 mt-1 whitespace-pre-line">${w.desc}</p>
                         ${statusBtn}
                     </div>
                     <button onclick="deleteWo('${w.id}')" class="text-gray-400 hover:text-red-500 text-xl">×</button>
@@ -805,6 +861,305 @@
         if(!workorders.length) { alert('无工单'); return; }
         XLSX.writeFile(XLSX.utils.book_append_sheet(XLSX.utils.book_new(),XLSX.utils.json_to_sheet(workorders.map(w=>({ID:w.id,类型:w.type,标题:w.title,描述:w.desc,门店:w.store,状态:w.status,创建时间:w.createdAt,反馈:w.feedback||'',备注:w.result||''}))),'工单'),`工单导出_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
+
+    function toggleAI() {
+        aiOpen = !aiOpen;
+        document.getElementById('aiPanel').classList.toggle('open', aiOpen);
+        document.getElementById('aiFab').classList.remove('has-notification');
+        if(aiOpen && !document.getElementById('aiMessages').children.length) {
+            addAIMsg('ai', '你好！我是库存智能助手 🤖<br><br>你可以这样问我：<br>• <span class="quick-question" onclick="aiQuickAsk(\'朝阳门店最近库存怎么样\')">朝阳门店最近库存怎么样</span><br>• <span class="quick-question" onclick="aiQuickAsk(\'哪些门店需要调拨\')">哪些门店需要调拨</span><br>• <span class="quick-question" onclick="aiQuickAsk(\'给海淀门店发预警\')">给海淀门店发预警</span><br>• <span class="quick-question" onclick="aiQuickAsk(\'生成库位规划建议\')">生成库位规划建议</span><br>• <span class="quick-question" onclick="aiQuickAsk(\'历史工单有哪些\')">历史工单有哪些</span>');
+            showQuickActions(['📊门店概况','🚨异常预警','🔄调拨建议','📋历史工单','📐库位规划']);
+        }
+    }
+
+    function aiQuickAsk(q) {
+        document.getElementById('aiInput').value = q;
+        sendAIMsg();
+    }
+
+    function showQuickActions(actions) {
+        const el = document.getElementById('aiQuickActions');
+        el.innerHTML = actions.map(a => `<button class="ai-quick-btn" onclick="aiQuickAsk('${a.replace(/'/g,"\\'")}')">${a}</button>`).join('');
+    }
+
+    function addAIMsg(role, html) {
+        const msgs = document.getElementById('aiMessages');
+        const div = document.createElement('div');
+        div.className = 'ai-msg ' + role;
+        div.innerHTML = `<div class="ai-msg-avatar">${role==='ai'?'🤖':'👤'}</div><div class="ai-msg-bubble">${html}</div>`;
+        msgs.appendChild(div);
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function showTyping() {
+        const msgs = document.getElementById('aiMessages');
+        const div = document.createElement('div');
+        div.className = 'ai-msg ai';
+        div.id = 'aiTyping';
+        div.innerHTML = `<div class="ai-msg-avatar">🤖</div><div class="ai-msg-bubble"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>`;
+        msgs.appendChild(div);
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function hideTyping() {
+        const t = document.getElementById('aiTyping');
+        if(t) t.remove();
+    }
+
+    function sendAIMsg() {
+        const input = document.getElementById('aiInput');
+        const msg = input.value.trim();
+        if(!msg) return;
+        addAIMsg('user', msg);
+        input.value = '';
+        showTyping();
+        setTimeout(() => {
+            hideTyping();
+            processAIQuery(msg);
+        }, 600 + Math.random()*400);
+    }
+
+    function findStore(name) {
+        if(!name) return null;
+        const stores = [...new Set(inventoryData.map(d=>d.store))];
+        return stores.find(s => s.includes(name) || name.includes(s)) || null;
+    }
+
+    function getStoreRecentData(storeName, days=7) {
+        return inventoryData.filter(d=>d.store===storeName).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,days);
+    }
+
+    function processAIQuery(q) {
+        const stats = inventoryData.length ? getStoreStats() : {};
+        const stores = Object.keys(stats);
+        let response = '';
+        let actions = [];
+
+        if(!inventoryData.length) {
+            addAIMsg('ai', '暂无数据，请先在「数据导入」页面上传数据或加载示例数据。');
+            showQuickActions(['🎲 加载示例数据']);
+            return;
+        }
+
+        const mentionedStore = stores.find(s => q.includes(s));
+
+        if(q.includes('加载示例') || q.includes('示例数据')) {
+            loadSampleData();
+            addAIMsg('ai', '✅ 已加载示例数据（8家门店×14天，含京沪两城坐标）。现在你可以查询任何门店信息了！');
+            showQuickActions(['📊门店概况','🚨异常预警','🔄调拨建议']);
+            return;
+        }
+
+        if(q.includes('概况') || q.includes('总体') || q.includes('整体') || q.includes('所有门店')) {
+            const high = Object.values(stats).filter(s=>s.avgCapUtil>=params.high).length;
+            const low = Object.values(stats).filter(s=>s.avgCapUtil<params.low).length;
+            const healthy = Object.values(stats).filter(s=>s.avgCapUtil>=params.healthy&&s.avgCapUtil<params.high).length;
+            const pendingWo = workorders.filter(w=>w.status==='pending').length;
+            response = `📊 整体运营概况：<br><br>
+                <div class="data-card">
+                • 门店总数：<b>${stores.length}家</b><br>
+                • 健康水位门店：<b class="text-green-600">${healthy}家</b><br>
+                • 高水位门店：<b class="text-yellow-600">${high}家</b><br>
+                • 低水位门店：<b class="text-red-600">${low}家</b><br>
+                • 待处理工单：<b class="text-orange-600">${pendingWo}个</b>
+                </div>`;
+            actions = ['🚨异常预警','🔄调拨建议','📋查看异常门店'];
+        }
+
+        else if(q.includes('库存') && mentionedStore) {
+            const s = stats[mentionedStore];
+            const recent = getStoreRecentData(mentionedStore, 7);
+            const latest = recent[0];
+            const util = latest.actualStock/latest.capacity*100;
+            const trend = recent.length >= 3 ? (util - recent[recent.length-1].actualStock/recent[recent.length-1].capacity*100) : 0;
+            response = `📦 <b>${mentionedStore}</b> 库存情况：<br><br>
+                <div class="data-card">
+                • 最新水位：<b style="color:${util>100?'#dc2626':util>=params.high?'#f59e0b':util>=params.low?'#22c55e':'#9ca3af'}">${util.toFixed(0)}%</b>（${latest.actualStock}/${latest.capacity}辆）<br>
+                • 7天趋势：${trend>2?'📈 上升'+Math.abs(trend).toFixed(0)+'%':trend<-2?'📉 下降'+Math.abs(trend).toFixed(0)+'%':'➡️ 平稳'}<br>
+                • 收车达成率：<b>${s.inRate}%</b> · 售车达成率：<b>${s.outRate}%</b><br>
+                • 月周转：<b>${s.avgTurnover.toFixed(1)}次</b><br>
+                • 门店类型：<span class="px-1 rounded text-xs ${s.profile.tagClass}">${s.profile.label}</span><br><br>
+                💡 ${s.profile.desc}
+                </div>`;
+            actions = ['🚨发预警','🔄建议调拨','📋创建工单','📊看其他门店'];
+        }
+
+        else if(q.includes('库存') && !mentionedStore) {
+            const sorted = Object.values(stats).sort((a,b)=>b.avgCapUtil-a.avgCapUtil);
+            response = `📦 各门店库存水位：<br><br><div class="data-card">`;
+            sorted.forEach(s=>{
+                const util = s.avgCapUtil;
+                const c = util>100?'#dc2626':util>=params.high?'#f59e0b':util>=params.low?'#22c55e':'#9ca3af';
+                response += `<div style="margin:4px 0">${s.store}：<b style="color:${c}">${util.toFixed(0)}%</b> <span class="text-xs text-gray-500">${s.profile.label}</span></div>`;
+            });
+            response += '</div>';
+            actions = ['🚨异常预警','🔄调拨建议'];
+        }
+
+        else if(q.includes('调拨') || q.includes('调配') || q.includes('调车')) {
+            const high = Object.values(stats).filter(s=>{
+                const latest = getStoreRecentData(s.store,1)[0];
+                return latest && latest.actualStock/latest.capacity*100 > params.high;
+            });
+            const low = Object.values(stats).filter(s=>{
+                const latest = getStoreRecentData(s.store,1)[0];
+                return latest && latest.actualStock/latest.capacity*100 < params.low;
+            });
+            response = `🔄 调拨建议：<br><br><div class="data-card">
+                <b>调出方（高水位）：</b><br>${high.map(s=>`• ${s.store}（水位${s.avgCapUtil.toFixed(0)}%）`).join('<br>')||'无'}<br><br>
+                <b>调入方（低水位）：</b><br>${low.map(s=>`• ${s.store}（水位${s.avgCapUtil.toFixed(0)}%）`).join('<br>')||'无'}<br><br>
+                💡 建议在「智能调拨」页面生成详细计划（含距离、成本、跨城风险）
+                </div>`;
+            actions = ['🚛生成调拨工单','📐库位规划','📋查看详情'];
+        }
+
+        else if(q.includes('预警') || q.includes('提醒') || q.includes('告警') || q.includes('通知')) {
+            let targetStore = mentionedStore;
+            if(!targetStore && q.includes('售车') || q.includes('销售')) {
+                const weakOut = Object.values(stats).filter(s=>s.outRate<80).sort((a,b)=>a.outRate-b.outRate);
+                if(weakOut.length) targetStore = weakOut[0].store;
+            }
+            if(!targetStore) {
+                const problems = Object.values(stats).filter(s=>s.avgCapUtil>params.high||s.avgCapUtil<params.low||s.inRate<80||s.outRate<80);
+                response = `🚨 需要预警的门店：<br><br><div class="data-card">`;
+                problems.forEach(s=>{
+                    const reasons = [];
+                    if(s.avgCapUtil>params.high) reasons.push('库存偏高');
+                    if(s.avgCapUtil<params.low) reasons.push('库存偏低');
+                    if(s.outRate<80) reasons.push(`售车仅${s.outRate}%`);
+                    if(s.inRate<80) reasons.push(`收车仅${s.inRate}%`);
+                    response += `<div style="margin:4px 0">• <b>${s.store}</b>：${reasons.join('、')}</div>`;
+                });
+                response += '</div>';
+                actions = ['📨给问题门店发预警','📋查看全部异常'];
+            } else {
+                const s = stats[targetStore];
+                response = `🚨 给 <b>${targetStore}</b> 创建预警通知：<br><br>
+                    <div class="data-card">
+                    预警内容：<br>`;
+                const alerts = [];
+                if(s.outRate<80) alerts.push(`售车目标达成率仅${s.outRate}%，需加强销售转化`);
+                if(s.inRate<80) alerts.push(`收车目标达成率仅${s.inRate}%，需拓展车源`);
+                if(s.avgCapUtil>params.high) alerts.push(`库存水位${s.avgCapUtil.toFixed(0)}%偏高，注意控制收车节奏`);
+                if(s.avgCapUtil<params.low) alerts.push(`库存水位${s.avgCapUtil.toFixed(0)}%偏低，注意补充车源`);
+                if(!alerts.length) alerts.push('运营指标正常，建议维持当前节奏');
+                response += alerts.map(a=>`• ${a}`).join('<br>');
+                response += `</div>
+                    <div class="task-card">
+                    <div class="task-card-title">📨 创建预警通知工单</div>
+                    <div class="text-xs text-gray-500">通知类型：门店负责人 · 优先级：${alerts.length>1?'高':'中'}</div>
+                    <button class="task-card-btn" onclick="createAlertWorkorder('${targetStore}', '${alerts.join('；')}')">✅ 创建预警工单</button>
+                    </div>`;
+                actions = ['📨创建预警','🔄建议调拨','📋其他门店'];
+            }
+        }
+
+        else if(q.includes('历史') || q.includes('工单') || q.includes('任务')) {
+            const recent = workorders.slice(-5).reverse();
+            if(!recent.length) {
+                response = `📋 暂无历史工单。<br><br>💡 你可以通过对话或各分析页面创建工单（库位调整、调拨任务、预警通知等），工单会在这里追踪状态。`;
+            } else {
+                response = `📋 最近工单（${workorders.length}个）：<br><br><div class="data-card">`;
+                recent.forEach(w=>{
+                    const statusColor = {pending:'#f59e0b',accepted:'#22c55e',rejected:'#ef4444',done:'#3b82f6'}[w.status];
+                    const statusText = {pending:'待处理',accepted:'已采纳',rejected:'已驳回',done:'已完成'}[w.status];
+                    response += `<div style="margin:6px 0;padding:6px;border-bottom:1px solid #eee">
+                        <b>${w.title}</b><br>
+                        <span class="text-xs text-gray-500">${w.createdAt} · ${w.store}</span>
+                        <span class="px-1 ml-1 rounded text-xs" style="color:${statusColor}">${statusText}</span>
+                    </div>`;
+                });
+                response += '</div>';
+            }
+            actions = ['🚨异常预警','🔄调拨建议','📊门店概况'];
+        }
+
+        else if(q.includes('库位') || q.includes('规划') || q.includes('租') || q.includes('扩库') || q.includes('缩库')) {
+            response = `📐 库位规划建议：<br><br><div class="data-card">
+                基于门店画像、周转能力、近期趋势、战略标记加权计算：<br><br>`;
+            const plans = Object.values(stats).map(s=>{
+                const healthyStock = s.capacity * (params.healthy+params.high)/200;
+                const turnoverRec = s.avgTurnover>0 ? Math.round(s.totalOut/s.days*30/(s.avgTurnover/2)) : s.capacity;
+                let profileRec = s.capacity;
+                if(s.profile.type==='healthy' && s.avgTurnover>=8) profileRec = Math.round(s.capacity*1.1);
+                else if(s.profile.type==='bottleneck') profileRec = Math.round(s.capacity*0.8);
+                else if(s.profile.type==='sales_strong') profileRec = Math.round(s.capacity*1.15);
+                else if(s.profile.type==='low_util') profileRec = Math.round(s.capacity*0.7);
+                const rec = Math.round((turnoverRec*0.4 + profileRec*0.3 + s.capacity*0.2 + (s.strategyTag==='shrink'?s.capacity*0.7:s.strategyTag==='expand'?s.capacity*1.3:s.capacity)*0.1));
+                return { ...s, recommend: Math.max(10,rec), delta: Math.max(10,rec)-s.capacity };
+            });
+            plans.sort((a,b)=>b.delta-a.delta);
+            plans.forEach(p=>{
+                const arrow = p.delta>0?'↑':p.delta<0?'↓':'→';
+                const c = p.delta>0?'#22c55e':p.delta<0?'#ef4444':'#6b7280';
+                response += `<div style="margin:4px 0">• ${p.store}：${p.capacity} → <b style="color:${c}">${p.recommend}（${arrow}${Math.abs(p.delta)}）</b></div>`;
+            });
+            response += `</div>
+                <div class="task-card">
+                <div class="task-card-title">📐 批量创建库位调整工单</div>
+                <button class="task-card-btn" onclick="createCapacityPlansFromAI()">✅ 生成库位规划工单</button>
+                </div>`;
+            actions = ['🚨异常门店','🔄调拨建议','📋查看详情'];
+        }
+
+        else if(mentionedStore) {
+            const s = stats[mentionedStore];
+            response = `🏪 <b>${mentionedStore}</b> 门店画像：<br><br>
+                <div class="data-card">
+                • 门店类型：<span class="px-1 rounded text-xs ${s.profile.tagClass}">${s.profile.label}</span><br>
+                • 平均水位：<b>${s.avgCapUtil.toFixed(0)}%</b> · 月周转${s.avgTurnover.toFixed(1)}次<br>
+                • 收车达成率：<b>${s.inRate}%</b> · 售车达成率：<b>${s.outRate}%</b><br>
+                • 稳定性：<b>${s.stability.toFixed(0)}%</b><br><br>
+                💡 ${s.profile.desc}
+                </div>`;
+            actions = ['📊库存详情','🚨发预警','🔄调拨建议','📋创建工单'];
+        }
+
+        else {
+            response = `我理解你在问关于「${q}」的问题。<br><br>目前我可以帮你：<br>
+                • 查询指定门店的库存和运营数据<br>
+                • 识别异常门店并发送预警通知<br>
+                • 生成调拨建议和库位规划<br>
+                • 查看和管理历史工单<br><br>
+                试试点击下方快捷按钮，或者直接提问具体门店名称。`;
+            actions = ['📊门店概况','🚨异常预警','🔄调拨建议','📐库位规划','📋历史工单'];
+        }
+
+        aiContext.lastQuery = q;
+        addAIMsg('ai', response);
+        showQuickActions(actions);
+    }
+
+    function createAlertWorkorder(store, reason) {
+        createWorkorder('alert', `[预警通知] ${store}运营异常`, `门店：${store}\n预警内容：${reason}\n通知对象：门店负责人\n请及时跟进处理。`, '高', store, { reason });
+        addAIMsg('ai', `✅ 已创建预警通知工单：<br><b>[预警通知] ${store}运营异常</b><br><br>工单已流转到工单中心，可在「📋 工单中心」查看和处理。<br>该预警可对接企业微信/钉钉/邮件通知到门店负责人。`);
+        showQuickActions(['📋查看工单中心','🚨其他预警','📊返回概况']);
+        updateWorkorderBadge();
+    }
+
+    function createCapacityPlansFromAI() {
+        const stats = getStoreStats();
+        let count = 0;
+        Object.values(stats).forEach(s=>{
+            const healthyStock = s.capacity * (params.healthy+params.high)/200;
+            const turnoverRec = s.avgTurnover>0 ? Math.round(s.totalOut/s.days*30/(s.avgTurnover/2)) : s.capacity;
+            let profileRec = s.capacity;
+            if(s.profile.type==='healthy' && s.avgTurnover>=8) profileRec = Math.round(s.capacity*1.1);
+            else if(s.profile.type==='bottleneck') profileRec = Math.round(s.capacity*0.8);
+            else if(s.profile.type==='sales_strong') profileRec = Math.round(s.capacity*1.15);
+            else if(s.profile.type==='low_util') profileRec = Math.round(s.capacity*0.7);
+            const rec = Math.round((turnoverRec*0.4 + profileRec*0.3 + s.capacity*0.2 + (s.strategyTag==='shrink'?s.capacity*0.7:s.strategyTag==='expand'?s.capacity*1.3:s.capacity)*0.1));
+            const finalRec = Math.max(10,rec);
+            if(finalRec !== s.capacity) {
+                createCapacityWorkorder(s.store, s.capacity, finalRec, 'AI助手生成：'+s.profile.desc);
+                count++;
+            }
+        });
+        addAIMsg('ai', `✅ 已生成 ${count} 条库位调整工单！<br><br>请前往「📋 工单中心」查看并处理这些工单。可对接租赁管理系统进行库位合同调整。`);
+        showQuickActions(['📋查看工单中心','📊门店概况']);
+        updateWorkorderBadge();
+    }
+
     </script>
 </body>
 </html>
