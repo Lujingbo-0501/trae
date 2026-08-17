@@ -3,1016 +3,808 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>门店库存管理分析工具</title>
+    <title>门店库存智能运营平台</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         .tab-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; font-weight: 600; }
-        .water-level-low { background: linear-gradient(to top, #ef4444 var(--level), #f3f4f6 var(--level)); }
-        .water-level-normal { background: linear-gradient(to top, #22c55e var(--level), #f3f4f6 var(--level)); }
-        .water-level-high { background: linear-gradient(to top, #f59e0b var(--level), #f3f4f6 var(--level)); }
-        .water-level-over { background: linear-gradient(to top, #dc2626 var(--level), #f3f4f6 var(--level)); }
         .card-shadow { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+        .tag-healthy { background: #dcfce7; color: #166534; }
+        .tag-collection-strong { background: #fef3c7; color: #92400e; }
+        .tag-sales-strong { background: #dbeafe; color: #1e40af; }
+        .tag-bottleneck { background: #fee2e2; color: #991b1b; }
+        .tag-transition { background: #f3e8ff; color: #6b21a8; }
+        .workorder-pending { border-left: 4px solid #f59e0b; }
+        .workorder-accepted { border-left: 4px solid #22c55e; }
+        .workorder-rejected { border-left: 4px solid #ef4444; }
+        .workorder-done { border-left: 4px solid #3b82f6; }
+        .progress-bar { transition: width 0.5s ease; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div class="container mx-auto px-4 py-6 max-w-7xl">
         <header class="mb-6">
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">📊 门店库存管理分析工具</h1>
-            <p class="text-gray-600">期初库存跟踪 · 收售差异分析 · 目标达成监控 · 库存水位策略</p>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">🚗 门店库存智能运营平台</h1>
+            <p class="text-gray-600">数据驱动 · 智能预测 · 调拨优化 · 工单闭环 · 持续学习</p>
         </header>
 
         <div class="flex border-b border-gray-200 mb-6 overflow-x-auto">
-            <button onclick="switchTab('data-import')" id="tab-data-import" class="tab-btn px-6 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap tab-active">📥 数据导入</button>
-            <button onclick="switchTab('inventory-calc')" id="tab-inventory-calc" class="tab-btn px-6 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">📦 库存计算</button>
-            <button onclick="switchTab('variance-analysis')" id="tab-variance-analysis" class="tab-btn px-6 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">🔍 差异分析</button>
-            <button onclick="switchTab('target-analysis')" id="tab-target-analysis" class="tab-btn px-6 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">🎯 目标达成</button>
-            <button onclick="switchTab('water-level')" id="tab-water-level" class="tab-btn px-6 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">💧 库存水位</button>
+            <button onclick="switchTab('data-import')" id="tab-data-import" class="tab-btn px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap tab-active">📥 数据导入</button>
+            <button onclick="switchTab('store-profile')" id="tab-store-profile" class="tab-btn px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">🏪 门店画像</button>
+            <button onclick="switchTab('capacity-planning')" id="tab-capacity-planning" class="tab-btn px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">📐 库位规划</button>
+            <button onclick="switchTab('allocation')" id="tab-allocation" class="tab-btn px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">🔄 智能调拨</button>
+            <button onclick="switchTab('water-level')" id="tab-water-level" class="tab-btn px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">💧 水位监控</button>
+            <button onclick="switchTab('workorder')" id="tab-workorder" class="tab-btn px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">📋 工单中心 <span id="workorderBadge" class="ml-1 px-2 py-0.5 bg-orange-500 text-white text-xs rounded-full hidden">0</span></button>
+            <button onclick="switchTab('params')" id="tab-params" class="tab-btn px-5 py-3 text-gray-600 hover:text-blue-600 whitespace-nowrap">⚙️ 参数配置</button>
         </div>
 
         <div id="data-import" class="tab-content">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="bg-white rounded-lg p-6 card-shadow">
                     <h2 class="text-xl font-semibold mb-4 text-gray-800">📁 文件导入</h2>
-                    <p class="text-sm text-gray-600 mb-4">支持 Excel (.xlsx, .xls) 和 CSV 格式。请确保数据包含以下字段：门店名称、日期、期初库存、收车目标、售车目标、实际收车、实际售车、实际库存、库位数</p>
+                    <p class="text-sm text-gray-600 mb-4">支持 Excel (.xlsx, .xls) 和 CSV 格式。必需字段：门店名称、日期、期初库存、库位数、收车目标、售车目标、实际收车、实际售车、实际库存<br>扩展字段：城市、区域、纬度、经度（用于调拨距离计算）</p>
                     <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer" id="dropZone" onclick="document.getElementById('fileInput').click()">
                         <div class="text-5xl mb-3">📎</div>
                         <p class="text-gray-600 mb-2">点击或拖拽文件到此处上传</p>
                         <p class="text-xs text-gray-400">支持 .xlsx, .xls, .csv</p>
                         <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleFileUpload(event)">
                     </div>
-                    <div class="mt-4 flex gap-2">
+                    <div class="mt-4 flex gap-2 flex-wrap">
                         <button onclick="downloadTemplate()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm">📄 下载模板</button>
-                        <button onclick="loadSampleData()" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm">🎲 加载示例数据</button>
+                        <button onclick="loadSampleData()" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm">🎲 加载示例数据（含多门店多日）</button>
                     </div>
                 </div>
-
                 <div class="bg-white rounded-lg p-6 card-shadow">
                     <h2 class="text-xl font-semibold mb-4 text-gray-800">✏️ 手工录入</h2>
-                    <div class="space-y-4">
+                    <div class="space-y-3">
                         <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">门店名称</label>
-                                <input type="text" id="manual-store" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="例如：朝阳门店">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">日期</label>
-                                <input type="date" id="manual-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            </div>
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">门店名称</label><input type="text" id="manual-store" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="例如：朝阳门店"></div>
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">城市</label><input type="text" id="manual-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="例如：北京"></div>
                         </div>
                         <div class="grid grid-cols-3 gap-3">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">期初库存</label>
-                                <input type="number" id="manual-opening" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">库位数</label>
-                                <input type="number" id="manual-capacity" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="100">
-                            </div>
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">日期</label><input type="date" id="manual-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">期初库存</label><input type="number" id="manual-opening" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">库位数</label><input type="number" id="manual-capacity" min="1" value="100" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">收车目标</label>
-                                <input type="number" id="manual-target-in" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">售车目标</label>
-                                <input type="number" id="manual-target-out" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="0">
-                            </div>
+                        <div class="grid grid-cols-4 gap-3">
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">收车目标</label><input type="number" id="manual-targetin" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">售车目标</label><input type="number" id="manual-targetout" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">实际收车</label><input type="number" id="manual-actualin" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">实际售车</label><input type="number" id="manual-actualout" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">实际收车</label>
-                                <input type="number" id="manual-actual-in" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">实际售车</label>
-                                <input type="number" id="manual-actual-out" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="0">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">实际库存</label>
-                            <input type="number" id="manual-actual-stock" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="0">
-                        </div>
-                        <button onclick="addManualData()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">➕ 添加记录</button>
+                        <div><label class="block text-sm font-medium text-gray-700 mb-1">实际库存</label><input type="number" id="manual-actualstock" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
+                        <button onclick="addManualData()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">➕ 添加记录</button>
                     </div>
                 </div>
             </div>
-
             <div class="mt-6 bg-white rounded-lg p-6 card-shadow">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-semibold text-gray-800">📋 已导入数据</h2>
                     <div class="flex gap-2">
-                        <button onclick="clearAllData()" class="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm">🗑️ 清空数据</button>
-                        <button onclick="exportData()" class="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm">💾 导出数据</button>
+                        <button onclick="clearAllData()" class="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm">🗑️ 清空</button>
+                        <button onclick="exportAllData()" class="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm">💾 导出</button>
                     </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-3 text-left font-medium text-gray-700">门店</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-700">日期</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">期初库存</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">库位数</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">收车目标</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">售车目标</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">实际收车</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">实际售车</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">实际库存</th>
-                                <th class="px-4 py-3 text-center font-medium text-gray-700">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="dataTableBody">
-                            <tr><td colspan="10" class="px-4 py-8 text-center text-gray-400">暂无数据，请上传文件或手工录入</td></tr>
-                        </tbody>
+                        <thead class="bg-gray-50"><tr>
+                            <th class="px-3 py-2 text-left">门店</th><th class="px-3 py-2 text-left">城市</th><th class="px-3 py-2 text-left">日期</th>
+                            <th class="px-3 py-2 text-right">期初</th><th class="px-3 py-2 text-right">库位</th>
+                            <th class="px-3 py-2 text-right">收目</th><th class="px-3 py-2 text-right">售目</th>
+                            <th class="px-3 py-2 text-right">实收</th><th class="px-3 py-2 text-right">实售</th><th class="px-3 py-2 text-right">实库</th>
+                            <th class="px-3 py-2 text-center">操作</th>
+                        </tr></thead>
+                        <tbody id="dataTableBody"><tr><td colspan="11" class="px-4 py-8 text-center text-gray-400">暂无数据</td></tr></tbody>
                     </table>
                 </div>
-                <div class="mt-4 text-sm text-gray-600" id="dataSummary"></div>
+                <div class="mt-3 text-sm text-gray-600" id="dataSummary"></div>
             </div>
         </div>
 
-        <div id="inventory-calc" class="tab-content hidden">
+        <div id="store-profile" class="tab-content hidden">
             <div class="bg-white rounded-lg p-6 card-shadow mb-6">
-                <h2 class="text-xl font-semibold mb-4 text-gray-800">📦 期末理论库存计算</h2>
-                <p class="text-sm text-gray-600 mb-4">公式：<strong>期末理论库存 = 期初库存 + 实际收车 - 实际售车</strong></p>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-3 text-left font-medium text-gray-700">门店</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-700">日期</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">期初库存</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">实际收车</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">实际售车</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">理论期末库存</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">实际库存</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">差异</th>
-                                <th class="px-4 py-3 text-center font-medium text-gray-700">状态</th>
-                            </tr>
-                        </thead>
-                        <tbody id="inventoryTableBody">
-                            <tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">请先导入数据</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white rounded-lg p-6 card-shadow">
-                    <h3 class="text-lg font-semibold mb-4 text-gray-800">📈 库存趋势图</h3>
-                    <canvas id="inventoryTrendChart" height="250"></canvas>
-                </div>
-                <div class="bg-white rounded-lg p-6 card-shadow">
-                    <h3 class="text-lg font-semibold mb-4 text-gray-800">📊 库存汇总统计</h3>
-                    <div id="inventorySummary" class="space-y-3">
-                        <p class="text-gray-400 text-center py-8">请先导入数据</p>
-                    </div>
-                </div>
+                <h2 class="text-xl font-semibold mb-2 text-gray-800">🏪 门店画像分析</h2>
+                <p class="text-sm text-gray-600 mb-4">基于历史数据分析每家门店的运营特征、能力模型和库存行为，为库位规划和调拨策略提供依据</p>
+                <div id="storeProfileContent" class="space-y-4"><p class="text-gray-400 text-center py-8">请先导入数据</p></div>
             </div>
         </div>
 
-        <div id="variance-analysis" class="tab-content hidden">
+        <div id="capacity-planning" class="tab-content hidden">
             <div class="bg-white rounded-lg p-6 card-shadow mb-6">
-                <h2 class="text-xl font-semibold mb-4 text-gray-800">🔍 库存差异分析</h2>
-                <p class="text-sm text-gray-600 mb-4">对比<strong>理论库存</strong>与<strong>实际库存</strong>，识别盘盈（多车）和盘亏（少车）情况</p>
-                
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <div class="text-sm text-gray-600">总记录数</div>
-                        <div class="text-2xl font-bold text-gray-800" id="totalRecords">0</div>
-                    </div>
-                    <div class="bg-green-50 rounded-lg p-4">
-                        <div class="text-sm text-green-600">一致记录</div>
-                        <div class="text-2xl font-bold text-green-600" id="matchRecords">0</div>
-                    </div>
-                    <div class="bg-red-50 rounded-lg p-4">
-                        <div class="text-sm text-red-600">盘亏（少车）</div>
-                        <div class="text-2xl font-bold text-red-600" id="shortageRecords">0</div>
-                    </div>
-                    <div class="bg-yellow-50 rounded-lg p-4">
-                        <div class="text-sm text-yellow-600">盘盈（多车）</div>
-                        <div class="text-2xl font-bold text-yellow-600" id="surplusRecords">0</div>
+                <h2 class="text-xl font-semibold mb-2 text-gray-800">📐 智能库位规划</h2>
+                <p class="text-sm text-gray-600 mb-4">基于门店画像、历史周转、战略调整等多因素预测下月库位需求，避免一刀切建议</p>
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div><label class="block text-sm font-medium text-blue-800 mb-1">预测周期</label><select id="planPeriod" class="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm bg-white"><option value="1">未来1个月</option><option value="3">未来3个月</option><option value="6">未来6个月</option></select></div>
+                        <div><label class="block text-sm font-medium text-blue-800 mb-1">季节性系数</label><input type="range" id="seasonFactor" min="0.7" max="1.5" step="0.05" value="1.0" class="w-full" oninput="document.getElementById('seasonFactorVal').textContent=this.value"><span id="seasonFactorVal" class="text-sm text-blue-700">1.0</span></div>
+                        <div class="flex items-end"><button onclick="generateCapacityPlan()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">🧮 生成库位规划</button></div>
                     </div>
                 </div>
-
-                <div class="mb-4 flex gap-2">
-                    <button onclick="filterVariance('all')" class="variance-filter px-3 py-1 rounded-full text-sm bg-blue-600 text-white" data-filter="all">全部</button>
-                    <button onclick="filterVariance('shortage')" class="variance-filter px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700" data-filter="shortage">盘亏</button>
-                    <button onclick="filterVariance('surplus')" class="variance-filter px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700" data-filter="surplus">盘盈</button>
-                    <button onclick="filterVariance('match')" class="variance-filter px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700" data-filter="match">一致</button>
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-3 text-left font-medium text-gray-700">门店</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-700">日期</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">理论库存</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">实际库存</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">差异数量</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">差异率</th>
-                                <th class="px-4 py-3 text-center font-medium text-gray-700">状态</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-700">可能原因</th>
-                            </tr>
-                        </thead>
-                        <tbody id="varianceTableBody">
-                            <tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">请先导入数据</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white rounded-lg p-6 card-shadow">
-                    <h3 class="text-lg font-semibold mb-4 text-gray-800">📊 差异分布</h3>
-                    <canvas id="varianceChart" height="250"></canvas>
-                </div>
-                <div class="bg-white rounded-lg p-6 card-shadow">
-                    <h3 class="text-lg font-semibold mb-4 text-gray-800">⚠️ 问题门店Top 5</h3>
-                    <div id="problemStores" class="space-y-3">
-                        <p class="text-gray-400 text-center py-8">请先导入数据</p>
-                    </div>
-                </div>
+                <div id="capacityPlanContent"><p class="text-gray-400 text-center py-8">点击「生成库位规划」查看建议</p></div>
             </div>
         </div>
 
-        <div id="target-analysis" class="tab-content hidden">
+        <div id="allocation" class="tab-content hidden">
             <div class="bg-white rounded-lg p-6 card-shadow mb-6">
-                <h2 class="text-xl font-semibold mb-4 text-gray-800">🎯 收售目标达成分析</h2>
-                <p class="text-sm text-gray-600 mb-4">对比<strong>实际收/售车</strong>与<strong>目标收/售车</strong>，分析目标完成情况</p>
-
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-blue-50 rounded-lg p-4">
-                        <div class="text-sm text-blue-600">收车目标总计</div>
-                        <div class="text-2xl font-bold text-blue-600" id="totalTargetIn">0</div>
-                    </div>
-                    <div class="bg-green-50 rounded-lg p-4">
-                        <div class="text-sm text-green-600">实际收车总计</div>
-                        <div class="text-2xl font-bold text-green-600" id="totalActualIn">0</div>
-                    </div>
-                    <div class="bg-purple-50 rounded-lg p-4">
-                        <div class="text-sm text-purple-600">售车目标总计</div>
-                        <div class="text-2xl font-bold text-purple-600" id="totalTargetOut">0</div>
-                    </div>
-                    <div class="bg-orange-50 rounded-lg p-4">
-                        <div class="text-sm text-orange-600">实际售车总计</div>
-                        <div class="text-2xl font-bold text-orange-600" id="totalActualOut">0</div>
+                <h2 class="text-xl font-semibold mb-2 text-gray-800">🔄 智能调拨计划</h2>
+                <p class="text-sm text-gray-600 mb-4">基于供需匹配、地理距离、历史成交区域生成调拨建议，减少跨城无效调拨</p>
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div><label class="block text-sm font-medium text-green-800 mb-1">最大调拨距离(km)</label><input type="number" id="allocMaxDistance" value="100" class="w-full px-3 py-2 border border-green-300 rounded-lg text-sm bg-white"></div>
+                        <div><label class="block text-sm font-medium text-green-800 mb-1">最小调拨量(辆)</label><input type="number" id="allocMinQty" value="3" class="w-full px-3 py-2 border border-green-300 rounded-lg text-sm bg-white"></div>
+                        <div><label class="block text-sm font-medium text-green-800 mb-1">每公里调拨成本</label><input type="number" id="allocCostPerKm" value="5" class="w-full px-3 py-2 border border-green-300 rounded-lg text-sm bg-white"></div>
+                        <div class="flex items-end"><button onclick="generateAllocationPlan()" class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">🚛 生成调拨计划</button></div>
                     </div>
                 </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-3 text-left font-medium text-gray-700">门店</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-700">日期</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">收车目标</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">实际收车</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">收车达成率</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">售车目标</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">实际售车</th>
-                                <th class="px-4 py-3 text-right font-medium text-gray-700">售车达成率</th>
-                                <th class="px-4 py-3 text-center font-medium text-gray-700">综合评级</th>
-                            </tr>
-                        </thead>
-                        <tbody id="targetTableBody">
-                            <tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">请先导入数据</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white rounded-lg p-6 card-shadow">
-                    <h3 class="text-lg font-semibold mb-4 text-gray-800">📈 收车目标达成趋势</h3>
-                    <canvas id="inTargetChart" height="250"></canvas>
-                </div>
-                <div class="bg-white rounded-lg p-6 card-shadow">
-                    <h3 class="text-lg font-semibold mb-4 text-gray-800">📉 售车目标达成趋势</h3>
-                    <canvas id="outTargetChart" height="250"></canvas>
-                </div>
-            </div>
-
-            <div class="mt-6 bg-white rounded-lg p-6 card-shadow">
-                <h3 class="text-lg font-semibold mb-4 text-gray-800">🏆 门店收售能力排名</h3>
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div>
-                        <h4 class="font-medium text-green-700 mb-2">收车达成率排名</h4>
-                        <div id="inRanking" class="space-y-2"></div>
-                    </div>
-                    <div>
-                        <h4 class="font-medium text-orange-700 mb-2">售车达成率排名</h4>
-                        <div id="outRanking" class="space-y-2"></div>
-                    </div>
-                </div>
+                <div id="allocationContent"><p class="text-gray-400 text-center py-8">点击「生成调拨计划」查看建议</p></div>
             </div>
         </div>
 
         <div id="water-level" class="tab-content hidden">
             <div class="bg-white rounded-lg p-6 card-shadow mb-6">
-                <h2 class="text-xl font-semibold mb-4 text-gray-800">💧 库存水位监控与策略</h2>
-                <p class="text-sm text-gray-600 mb-4">基于<strong>库位数</strong>监控库存水位，自动生成运营策略建议</p>
+                <h2 class="text-xl font-semibold mb-2 text-gray-800">💧 库存水位监控</h2>
+                <p class="text-sm text-gray-600 mb-4">实时监控各门店库存水位，即时策略建议可一键生成工单</p>
+                <div id="waterLevelContent"><p class="text-gray-400 text-center py-8">请先导入数据</p></div>
+            </div>
+        </div>
 
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div class="border-l-4 border-gray-400 pl-4">
-                        <div class="text-sm text-gray-600">空置区</div>
-                        <div class="text-xs text-gray-500">0-30%</div>
+        <div id="workorder" class="tab-content hidden">
+            <div class="bg-white rounded-lg p-6 card-shadow">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-gray-800">📋 工单中心</h2>
+                    <div class="flex gap-2">
+                        <select id="workorderFilter" onchange="renderWorkorders()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                            <option value="all">全部状态</option><option value="pending">待处理</option><option value="accepted">已采纳</option><option value="rejected">已驳回</option><option value="done">已完成</option>
+                        </select>
+                        <button onclick="exportWorkorders()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">📥 导出工单</button>
                     </div>
-                    <div class="border-l-4 border-red-500 pl-4">
-                        <div class="text-sm text-red-600">低水位</div>
-                        <div class="text-xs text-red-500">30-50%</div>
+                </div>
+                <div class="grid grid-cols-4 gap-4 mb-6">
+                    <div class="bg-orange-50 rounded-lg p-4 text-center"><div class="text-2xl font-bold text-orange-600" id="woPending">0</div><div class="text-sm text-orange-600">待处理</div></div>
+                    <div class="bg-green-50 rounded-lg p-4 text-center"><div class="text-2xl font-bold text-green-600" id="woAccepted">0</div><div class="text-sm text-green-600">已采纳</div></div>
+                    <div class="bg-blue-50 rounded-lg p-4 text-center"><div class="text-2xl font-bold text-blue-600" id="woDone">0</div><div class="text-sm text-blue-600">已完成</div></div>
+                    <div class="bg-purple-50 rounded-lg p-4 text-center"><div class="text-2xl font-bold text-purple-600" id="woAccuracy">0%</div><div class="text-sm text-purple-600">模型准确率</div></div>
+                </div>
+                <div id="workorderList" class="space-y-3"><p class="text-gray-400 text-center py-8">暂无工单，系统生成的策略建议将出现在这里</p></div>
+            </div>
+        </div>
+
+        <div id="params" class="tab-content hidden">
+            <div class="bg-white rounded-lg p-6 card-shadow">
+                <h2 class="text-xl font-semibold mb-2 text-gray-800">⚙️ 参数配置</h2>
+                <p class="text-sm text-gray-600 mb-4">配置模型参数、门店属性，人工干预算法权重</p>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="font-semibold text-gray-700 mb-3">水位阈值设置</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3"><label class="w-24 text-sm">低水位线</label><input type="number" id="paramLow" value="30" class="w-20 px-2 py-1 border rounded text-sm"><span class="text-sm text-gray-500">%</span></div>
+                            <div class="flex items-center gap-3"><label class="w-24 text-sm">健康下限</label><input type="number" id="paramHealthy" value="50" class="w-20 px-2 py-1 border rounded text-sm"><span class="text-sm text-gray-500">%</span></div>
+                            <div class="flex items-center gap-3"><label class="w-24 text-sm">健康上限</label><input type="number" id="paramHigh" value="80" class="w-20 px-2 py-1 border rounded text-sm"><span class="text-sm text-gray-500">%</span></div>
+                        </div>
                     </div>
-                    <div class="border-l-4 border-green-500 pl-4">
-                        <div class="text-sm text-green-600">健康水位</div>
-                        <div class="text-xs text-green-500">50-80%</div>
-                    </div>
-                    <div class="border-l-4 border-yellow-500 pl-4">
-                        <div class="border-l-4 border-red-600 pl-4 -ml-4">
-                            <div class="text-sm text-yellow-600">高水位</div>
-                            <div class="text-xs text-yellow-500">80-100%</div>
+                    <div>
+                        <h3 class="font-semibold text-gray-700 mb-3">库位规划权重</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3"><label class="w-24 text-sm">历史周转</label><input type="range" id="weightTurnover" min="0" max="100" value="40" class="flex-1"><span id="weightTurnoverVal" class="text-sm w-10">40%</span></div>
+                            <div class="flex items-center gap-3"><label class="w-24 text-sm">门店类型</label><input type="range" id="weightProfile" min="0" max="100" value="30" class="flex-1"><span id="weightProfileVal" class="text-sm w-10">30%</span></div>
+                            <div class="flex items-center gap-3"><label class="w-24 text-sm">趋势变化</label><input type="range" id="weightTrend" min="0" max="100" value="20" class="flex-1"><span id="weightTrendVal" class="text-sm w-10">20%</span></div>
+                            <div class="flex items-center gap-3"><label class="w-24 text-sm">战略调整</label><input type="range" id="weightStrategy" min="0" max="100" value="10" class="flex-1"><span id="weightStrategyVal" class="text-sm w-10">10%</span></div>
                         </div>
                     </div>
                 </div>
-                <div class="ml-4 -mt-2 mb-6">
-                    <div class="border-l-4 border-red-600 pl-4">
-                        <div class="text-sm text-red-700">溢出风险</div>
-                        <div class="text-xs text-red-600">>100%</div>
+                <div class="mt-6">
+                    <h3 class="font-semibold text-gray-700 mb-3">门店属性配置（支持战略转型标记）</h3>
+                    <div class="mb-3 flex gap-2">
+                        <select id="paramStore" class="px-3 py-2 border rounded-lg text-sm flex-1"><option value="">选择门店</option></select>
+                        <select id="paramStrategyTag" class="px-3 py-2 border rounded-lg text-sm">
+                            <option value="normal">正常运营</option><option value="shrink">战略缩库（转型）</option><option value="expand">战略扩库</option><option value="pilot">试点门店</option>
+                        </select>
+                        <button onclick="saveStoreParams()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">💾 保存</button>
                     </div>
+                    <div id="storeParamsList" class="text-sm text-gray-600"></div>
                 </div>
-
-                <div id="waterLevelCards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="col-span-full text-center py-8 text-gray-400">请先导入数据</div>
+                <div class="mt-6 flex gap-2">
+                    <button onclick="saveAllParams()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">保存所有参数</button>
+                    <button onclick="resetParams()" class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">恢复默认</button>
                 </div>
-            </div>
-
-            <div class="bg-white rounded-lg p-6 card-shadow">
-                <h3 class="text-lg font-semibold mb-4 text-gray-800">📋 运营策略建议汇总</h3>
-                <div id="strategySummary" class="space-y-4">
-                    <p class="text-gray-400 text-center py-8">请先导入数据</p>
-                </div>
-            </div>
-
-            <div class="mt-6 bg-white rounded-lg p-6 card-shadow">
-                <h3 class="text-lg font-semibold mb-4 text-gray-800">📊 门店库存水位分布图</h3>
-                <canvas id="waterLevelChart" height="300"></canvas>
             </div>
         </div>
     </div>
 
     <script>
-        let inventoryData = [];
-        let charts = {};
+    let inventoryData = [];
+    let workorders = [];
+    let storeParams = {};
+    let params = { low: 30, healthy: 50, high: 80, weights: { turnover: 40, profile: 30, trend: 20, strategy: 10 } };
+    let charts = {};
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('manual-date').value = today;
-            setupDragDrop();
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('manual-date').value = new Date().toISOString().split('T')[0];
+        setupDragDrop();
+        loadFromStorage();
+        setupWeightSliders();
+    });
+
+    function setupWeightSliders() {
+        ['weightTurnover','weightProfile','weightTrend','weightStrategy'].forEach(id => {
+            const el = document.getElementById(id);
+            el.addEventListener('input', () => document.getElementById(id+'Val').textContent = el.value+'%');
+        });
+    }
+
+    function saveToStorage() {
+        try { localStorage.setItem('invData', JSON.stringify(inventoryData)); localStorage.setItem('invWo', JSON.stringify(workorders)); localStorage.setItem('invParams', JSON.stringify(params)); localStorage.setItem('invStoreParams', JSON.stringify(storeParams)); } catch(e){}
+    }
+    function loadFromStorage() {
+        try {
+            inventoryData = JSON.parse(localStorage.getItem('invData')||'[]');
+            workorders = JSON.parse(localStorage.getItem('invWo')||'[]');
+            params = JSON.parse(localStorage.getItem('invParams')||'null') || params;
+            storeParams = JSON.parse(localStorage.getItem('invStoreParams')||'{}');
+            if(inventoryData.length) updateDataTable();
+            updateWorkorderBadge();
+        } catch(e){}
+    }
+
+    function setupDragDrop() {
+        const dz = document.getElementById('dropZone');
+        dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('border-blue-500','bg-blue-50'); });
+        dz.addEventListener('dragleave', e => { e.preventDefault(); dz.classList.remove('border-blue-500','bg-blue-50'); });
+        dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('border-blue-500','bg-blue-50'); if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); });
+    }
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('tab-active'));
+        document.getElementById(tabId).classList.remove('hidden');
+        document.getElementById('tab-'+tabId).classList.add('tab-active');
+        if(tabId==='store-profile') renderStoreProfiles();
+        if(tabId==='water-level') renderWaterLevel();
+        if(tabId==='workorder') renderWorkorders();
+        if(tabId==='params') renderParamsTab();
+    }
+
+    function handleFileUpload(e) { if(e.target.files[0]) processFile(e.target.files[0]); }
+    function processFile(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const wb = XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+                const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                const parsed = json.map(r => ({
+                    store: r['门店']||r['门店名称']||r['store']||'',
+                    city: r['城市']||r['city']||'未知',
+                    date: formatDate(r['日期']||r['date']||''),
+                    opening: +(r['期初库存']||r['opening']||0),
+                    capacity: +(r['库位数']||r['capacity']||100),
+                    targetIn: +(r['收车目标']||r['targetIn']||0),
+                    targetOut: +(r['售车目标']||r['targetOut']||0),
+                    actualIn: +(r['实际收车']||r['actualIn']||0),
+                    actualOut: +(r['实际售车']||r['actualOut']||0),
+                    actualStock: +(r['实际库存']||r['actualStock']||0),
+                    lat: +(r['纬度']||r['lat']||0),
+                    lng: +(r['经度']||r['lng']||0)
+                })).filter(r=>r.store);
+                inventoryData = inventoryData.concat(parsed);
+                saveToStorage();
+                updateDataTable();
+                alert(`导入${parsed.length}条数据`);
+            } catch(err) { alert('解析失败: '+err.message); }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+    function formatDate(v) {
+        if(!v) return '';
+        if(typeof v==='number') return new Date((v-25569)*864e5).toISOString().split('T')[0];
+        const d = new Date(v); return isNaN(d.getTime())?String(v):d.toISOString().split('T')[0];
+    }
+    function addManualData() {
+        const store = document.getElementById('manual-store').value.trim();
+        if(!store) { alert('请输入门店'); return; }
+        inventoryData.push({
+            store, city: document.getElementById('manual-city').value.trim()||'未知',
+            date: document.getElementById('manual-date').value,
+            opening: +document.getElementById('manual-opening').value||0,
+            capacity: +document.getElementById('manual-capacity').value||100,
+            targetIn: +document.getElementById('manual-targetin').value||0,
+            targetOut: +document.getElementById('manual-targetout').value||0,
+            actualIn: +document.getElementById('manual-actualin').value||0,
+            actualOut: +document.getElementById('manual-actualout').value||0,
+            actualStock: +document.getElementById('manual-actualstock').value||0,
+            lat:0,lng:0
+        });
+        saveToStorage(); updateDataTable();
+        ['manual-store','manual-city','manual-opening','manual-targetin','manual-targetout','manual-actualin','manual-actualout','manual-actualstock'].forEach(id=>document.getElementById(id).value='');
+    }
+    function deleteRow(i) { inventoryData.splice(i,1); saveToStorage(); updateDataTable(); }
+    function clearAllData() { if(confirm('清空所有数据？')){ inventoryData=[]; workorders=[]; saveToStorage(); updateDataTable(); renderWorkorders();} }
+    function updateDataTable() {
+        const tb = document.getElementById('dataTableBody');
+        if(!inventoryData.length) { tb.innerHTML='<tr><td colspan="11" class="px-4 py-8 text-center text-gray-400">暂无数据</td></tr>'; document.getElementById('dataSummary').textContent=''; return;}
+        tb.innerHTML = inventoryData.map((r,i)=>`<tr class="border-b hover:bg-gray-50">
+            <td class="px-3 py-2">${r.store}</td><td class="px-3 py-2">${r.city}</td><td class="px-3 py-2">${r.date}</td>
+            <td class="px-3 py-2 text-right">${r.opening}</td><td class="px-3 py-2 text-right">${r.capacity}</td>
+            <td class="px-3 py-2 text-right">${r.targetIn}</td><td class="px-3 py-2 text-right">${r.targetOut}</td>
+            <td class="px-3 py-2 text-right text-green-600">${r.actualIn}</td><td class="px-3 py-2 text-right text-orange-600">${r.actualOut}</td><td class="px-3 py-2 text-right">${r.actualStock}</td>
+            <td class="px-3 py-2 text-center"><button onclick="deleteRow(${i})" class="text-red-500 hover:text-red-700 text-xs">删除</button></td>
+        </tr>`).join('');
+        document.getElementById('dataSummary').textContent = `共${inventoryData.length}条记录，${[...new Set(inventoryData.map(d=>d.store))].length}个门店`;
+    }
+
+    function getStoreStats() {
+        const stats = {};
+        inventoryData.forEach(r => {
+            if(!stats[r.store]) stats[r.store] = { store:r.store, city:r.city, days:0, totalIn:0, totalOut:0, totalTargetIn:0, totalTargetOut:0, avgStock:0, avgCapacity:0, stockLevels:[], turnoverRates:[], capUtil:[], lat:r.lat||0, lng:r.lng||0 };
+            const s = stats[r.store];
+            s.days++; s.totalIn+=r.actualIn; s.totalOut+=r.actualOut; s.totalTargetIn+=r.targetIn; s.totalTargetOut+=r.targetOut;
+            s.stockLevels.push(r.actualStock); s.capacity = r.capacity||s.capacity; s.capUtil.push(r.actualStock/r.capacity*100);
+            if(r.actualStock>0) s.turnoverRates.push(r.actualOut/((r.opening+r.actualStock)/2)*30);
+        });
+        Object.values(stats).forEach(s => {
+            s.avgStock = s.stockLevels.reduce((a,b)=>a+b,0)/s.days;
+            s.avgCapUtil = s.capUtil.reduce((a,b)=>a+b,0)/s.days;
+            s.avgTurnover = s.turnoverRates.length? s.turnoverRates.reduce((a,b)=>a+b,0)/s.turnoverRates.length : 0;
+            s.inRate = s.totalTargetIn? Math.round(s.totalIn/s.totalTargetIn*100):100;
+            s.outRate = s.totalTargetOut? Math.round(s.totalOut/s.totalTargetOut*100):100;
+            const capStd = Math.sqrt(s.capUtil.map(x=>(x-s.avgCapUtil)**2).reduce((a,b)=>a+b,0)/s.days);
+            s.stability = Math.max(0, 100-capStd);
+            s.profile = classifyStore(s);
+            s.strategyTag = storeParams[s.store]?.tag || 'normal';
+        });
+        return stats;
+    }
+
+    function classifyStore(s) {
+        const inStrong = s.inRate >= 100;
+        const outStrong = s.outRate >= 100;
+        const inWeak = s.inRate < 80;
+        const outWeak = s.outRate < 80;
+        const highTurnover = s.avgTurnover >= 8;
+        const lowTurnover = s.avgTurnover < 3;
+        const highUtil = s.avgCapUtil >= params.high;
+        const lowUtil = s.avgCapUtil < params.low;
+        const stable = s.stability >= 80;
+        if(highTurnover && highUtil && inStrong && outStrong && stable) return { type:'healthy', label:'🚀 高效周转型', tagClass:'tag-healthy', desc:'收售双强、周转快、水位高但健康，是标杆门店' };
+        if(inStrong && outWeak && highUtil) return { type:'collection_strong', label:'📥 收强售弱型', tagClass:'tag-collection-strong', desc:'收车能力强但售车跟不上，库存积压风险，重点提升销售' };
+        if(outStrong && inWeak && lowUtil) return { type:'sales_strong', label:'📤 售强收弱型', tagClass:'tag-sales-strong', desc:'销售能力强但车源不足，需拓展收车渠道' };
+        if(lowTurnover && highUtil) return { type:'bottleneck', label:'⚠️ 周转瓶颈型', tagClass:'tag-bottleneck', desc:'库存高但周转慢，存在滞销风险，需促销去化+控制收车' };
+        if(storeParams[s.store]?.tag === 'shrink') return { type:'transition', label:'🔄 转型缩库型', tagClass:'tag-transition', desc:'战略调整中，计划缩减库位' };
+        if(storeParams[s.store]?.tag === 'expand') return { type:'transition', label:'🔄 转型扩库型', tagClass:'tag-transition', desc:'战略调整中，计划扩大库位' };
+        if(lowUtil && s.days>=3) return { type:'low_util', label:'📭 库位空置型', tagClass:'tag-sales-strong', desc:'库存水位长期偏低，库位利用率不足，考虑缩库或加大收车' };
+        return { type:'normal', label:'✅ 正常运营型', tagClass:'tag-healthy', desc:'运营平稳，各项指标正常' };
+    }
+
+    function renderStoreProfiles() {
+        const stats = getStoreStats();
+        const container = document.getElementById('storeProfileContent');
+        if(!Object.keys(stats).length) { container.innerHTML='<p class="text-gray-400 text-center py-8">请先导入数据</p>'; return; }
+        const stores = Object.values(stats).sort((a,b)=>b.avgCapUtil-a.avgCapUtil);
+        container.innerHTML = stores.map(s => `
+            <div class="border rounded-lg p-5 hover:shadow-md transition-shadow">
+                <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <h3 class="text-lg font-bold text-gray-800">${s.store}</h3>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-medium ${s.profile.tagClass}">${s.profile.label}</span>
+                            ${s.strategyTag!=='normal'?`<span class="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700">战略调整</span>`:''}
+                        </div>
+                        <p class="text-sm text-gray-500">${s.city} · 数据${s.days}天 · 库位${s.capacity}个</p>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded">${s.profile.desc}</p>
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    <div class="text-center p-2 bg-blue-50 rounded"><div class="text-xl font-bold text-blue-600">${s.avgCapUtil.toFixed(0)}%</div><div class="text-xs text-gray-500">平均库位利用率</div></div>
+                    <div class="text-center p-2 bg-green-50 rounded"><div class="text-xl font-bold text-green-600">${s.inRate}%</div><div class="text-xs text-gray-500">收车达成率</div></div>
+                    <div class="text-center p-2 bg-orange-50 rounded"><div class="text-xl font-bold text-orange-600">${s.outRate}%</div><div class="text-xs text-gray-500">售车达成率</div></div>
+                    <div class="text-center p-2 bg-purple-50 rounded"><div class="text-xl font-bold text-purple-600">${s.avgTurnover.toFixed(1)}</div><div class="text-xs text-gray-500">月周转次数</div></div>
+                    <div class="text-center p-2 bg-cyan-50 rounded"><div class="text-xl font-bold text-cyan-600">${s.avgStock.toFixed(0)}</div><div class="text-xs text-gray-500">平均库存(辆)</div></div>
+                    <div class="text-center p-2 bg-gray-50 rounded"><div class="text-xl font-bold text-gray-600">${s.stability.toFixed(0)}%</div><div class="text-xs text-gray-500">水位稳定性</div></div>
+                </div>
+                <div class="mt-4">
+                    <div class="text-xs text-gray-500 mb-1">近${Math.min(s.days,7)}天库位利用率趋势</div>
+                    <div class="flex items-end gap-1 h-16">
+                        ${s.capUtil.slice(-7).map(u => `<div class="flex-1 rounded-t transition-all" style="height:${Math.min(u,120)}%;background-color:${u>100?'#dc2626':u>=params.high?'#f59e0b':u>=params.low?'#22c55e':'#9ca3af'}"></div>`).join('')}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function generateCapacityPlan() {
+        const stats = getStoreStats();
+        if(!Object.keys(stats).length) { alert('请先导入数据'); return; }
+        const period = +document.getElementById('planPeriod').value;
+        const season = +document.getElementById('seasonFactor').value;
+        const w = params.weights;
+        const wSum = w.turnover+w.profile+w.trend+w.strategy;
+
+        const plans = Object.values(stats).map(s => {
+            const healthyStock = s.capacity * (params.healthy/100 + params.high/100) / 2;
+            const turnoverNeed = s.avgTurnover > 0 ? s.totalOut/s.days*30 / (s.avgTurnover/2) : healthyStock;
+            const turnoverRec = Math.round(turnoverNeed * season * (period/1));
+            let profileRec = s.capacity;
+            if(s.profile.type==='healthy' && s.avgTurnover>=8) profileRec = Math.round(s.capacity * 1.1);
+            else if(s.profile.type==='collection_strong') profileRec = s.capacity;
+            else if(s.profile.type==='sales_strong') profileRec = Math.round(s.capacity * 1.15);
+            else if(s.profile.type==='bottleneck') profileRec = Math.round(s.capacity * 0.8);
+            else if(s.profile.type==='low_util') profileRec = Math.round(s.capacity * 0.7);
+            const trendUtil = s.capUtil.slice(-3).reduce((a,b)=>a+b,0)/Math.min(3,s.capUtil.length);
+            const earlyUtil = s.capUtil.slice(0,3).reduce((a,b)=>a+b,0)/Math.min(3,s.capUtil.length);
+            const trendChange = trendUtil - earlyUtil;
+            const trendRec = Math.round(s.capacity * (1 + trendChange/200));
+            let strategyRec = s.capacity;
+            if(s.strategyTag==='shrink') strategyRec = Math.round(s.capacity*0.7);
+            else if(s.strategyTag==='expand') strategyRec = Math.round(s.capacity*1.3);
+            const rec = Math.round((turnoverRec*w.turnover + profileRec*w.profile + trendRec*w.trend + strategyRec*w.strategy)/wSum);
+            const finalRec = Math.max(10, rec);
+            let reason = [];
+            if(s.profile.type==='healthy') reason.push('高周转高效门店，可维持或小幅增加');
+            if(s.profile.type==='collection_strong') reason.push('售车能力待提升，不建议加库位，先解决销售瓶颈');
+            if(s.profile.type==='sales_strong') reason.push('销售能力强，车源不足，建议增加库位支撑收车');
+            if(s.profile.type==='bottleneck') reason.push('周转慢库存高，建议缩减库位倒逼去化');
+            if(s.profile.type==='low_util') reason.push('利用率长期偏低，建议缩库降本');
+            if(s.strategyTag==='shrink') reason.push('战略转型缩库中');
+            if(s.strategyTag==='expand') reason.push('战略扩库中');
+            if(trendChange>10) reason.push('近期利用率上升趋势明显');
+            if(trendChange<-10) reason.push('近期利用率下降趋势明显');
+            return { ...s, recommend: finalRec, current: s.capacity, delta: finalRec-s.capacity, reason: reason.join('；') };
         });
 
-        function setupDragDrop() {
-            const dropZone = document.getElementById('dropZone');
-            dropZone.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        document.getElementById('capacityPlanContent').innerHTML = `
+            <div class="mb-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
+                📊 基于 ${Object.keys(plans).length} 家门店画像生成未来${period}个月库位规划建议，季节性系数${season}
+            </div>
+            <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50"><tr>
+                    <th class="px-3 py-2 text-left">门店</th><th class="px-3 py-2 text-left">类型</th>
+                    <th class="px-3 py-2 text-right">当前库位</th><th class="px-3 py-2 text-right">建议库位</th><th class="px-3 py-2 text-right">变化</th>
+                    <th class="px-3 py-2 text-left">建议理由</th><th class="px-3 py-2 text-center">操作</th>
+                </tr></thead>
+                <tbody>${plans.map((p,i)=>{
+                    const dc = p.delta>0?'text-green-600':p.delta<0?'text-red-600':'text-gray-500';
+                    const arrow = p.delta>0?'↑':p.delta<0?'↓':'→';
+                    return `<tr class="border-b hover:bg-gray-50">
+                        <td class="px-3 py-2 font-medium">${p.store}</td>
+                        <td class="px-3 py-2"><span class="px-2 py-0.5 rounded text-xs ${p.profile.tagClass}">${p.profile.label}</span></td>
+                        <td class="px-3 py-2 text-right">${p.current}</td>
+                        <td class="px-3 py-2 text-right font-bold text-blue-600">${p.recommend}</td>
+                        <td class="px-3 py-2 text-right font-semibold ${dc}">${arrow} ${Math.abs(p.delta)}</td>
+                        <td class="px-3 py-2 text-gray-600 text-xs">${p.reason}</td>
+                        <td class="px-3 py-2 text-center"><button onclick="createCapacityWorkorder('${p.store}',${p.current},${p.recommend},'${p.reason}')" class="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs hover:bg-orange-200">📋 生成工单</button></td>
+                    </tr>`;
+                }).join('')}</tbody>
+            </table></div>
+            <div class="mt-4 grid grid-cols-3 gap-4">
+                <div class="text-center p-4 bg-green-50 rounded-lg"><div class="text-2xl font-bold text-green-600">${plans.filter(p=>p.delta>0).length}</div><div class="text-sm text-green-600">建议增加库位门店</div></div>
+                <div class="text-center p-4 bg-red-50 rounded-lg"><div class="text-2xl font-bold text-red-600">${plans.filter(p=>p.delta<0).length}</div><div class="text-sm text-red-600">建议缩减库位门店</div></div>
+                <div class="text-center p-4 bg-blue-50 rounded-lg"><div class="text-2xl font-bold text-blue-600">${plans.reduce((s,p)=>s+p.delta,0)}</div><div class="text-sm text-blue-600">净库位变化</div></div>
+            </div>
+        `;
+    }
+
+    function calcDistance(lat1,lng1,lat2,lng2) {
+        if(!lat1||!lat2) return 50;
+        const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lng2-lng1)*Math.PI/180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+        return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    }
+
+    function generateAllocationPlan() {
+        const stats = getStoreStats();
+        const stores = Object.values(stats);
+        if(stores.length<2) { alert('至少需要2家门店数据才能生成调拨计划'); return; }
+        const maxDist = +document.getElementById('allocMaxDistance').value;
+        const minQty = +document.getElementById('allocMinQty').value;
+        const costPerKm = +document.getElementById('allocCostPerKm').value;
+        const high = params.high/100;
+        const low = params.low/100;
+        const latestByStore = {};
+        [...inventoryData].sort((a,b)=>a.date.localeCompare(b.date)).forEach(r => latestByStore[r.store] = r);
+        const suppliers = [], demanders = [];
+        stores.forEach(s => {
+            const latest = latestByStore[s.store];
+            if(!latest) return;
+            const util = latest.actualStock / latest.capacity;
+            const excess = util > high ? Math.round(latest.actualStock - latest.capacity*(params.healthy/100+params.high/100)/2) : 0;
+            const need = util < low ? Math.round(latest.capacity*(params.healthy/100+params.high/100)/2 - latest.actualStock) : 0;
+            const sameCity = stores.filter(x=>x.city===s.city&&x.store!==s.store).length;
+            const crossCityPenalty = sameCity>0?0:200;
+            if(excess >= minQty) suppliers.push({ ...s, latest, excessQty: excess, city: s.city, crossCityPenalty });
+            if(need >= minQty) demanders.push({ ...s, latest, needQty: need, city: s.city });
+        });
+        const plans = [];
+        suppliers.forEach(sup => {
+            demanders.forEach(dem => {
+                if(sup.store===dem.store) return;
+                const dist = calcDistance(sup.lat,sup.lng,dem.lat,dem.lng) || (sup.city===dem.city?20:80);
+                if(dist > maxDist && !(sup.city!==dem.city && dem.needQty>10)) return;
+                const sameCity = sup.city===dem.city;
+                const qty = Math.min(sup.excessQty, dem.needQty);
+                const cost = Math.round(dist*costPerKm + (sameCity?0:crossCityPenalty));
+                const costPerCar = qty>0?Math.round(cost/qty):9999;
+                let riskWarning = '';
+                if(!sameCity) riskWarning = '⚠️ 跨城调拨，需确认成交区域避免浪费';
+                if(costPerCar > 500) riskWarning = '⚠️ 单车调拨成本较高，建议谨慎评估';
+                if(sup.profile.type==='healthy' && dem.profile.type==='bottleneck') riskWarning += '；调出方为高效门店，需评估其备货需求';
+                const priority = sameCity && costPerCar<200 ? '高' : sameCity?'中':'低';
+                plans.push({ from:sup.store, fromCity:sup.city, to:dem.store, toCity:dem.city, qty, dist:Math.round(dist), cost, costPerCar, sameCity, priority, riskWarning });
             });
-            dropZone.addEventListener('dragleave', function(e) {
-                e.preventDefault();
-                dropZone.classList.remove('border-blue-500', 'bg-blue-50');
-            });
-            dropZone.addEventListener('drop', function(e) {
-                e.preventDefault();
-                dropZone.classList.remove('border-blue-500', 'bg-blue-50');
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    processFile(files[0]);
-                }
-            });
-        }
+        });
+        plans.sort((a,b)=>{
+            const pri = {'高':0,'中':1,'低':2};
+            return pri[a.priority]-pri[b.priority] || a.costPerCar-b.costPerCar;
+        });
+        const used = {};
+        const finalPlans = plans.filter(p => {
+            const remain = Math.max(0, p.qty - (used[p.from]||0));
+            if(remain < minQty) return false;
+            const actualQty = Math.min(remain, p.qty);
+            used[p.from] = (used[p.from]||0) + actualQty;
+            p.actualQty = actualQty;
+            return true;
+        });
 
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('tab-active'));
-            document.getElementById(tabId).classList.remove('hidden');
-            document.getElementById('tab-' + tabId).classList.add('tab-active');
-            
-            if (tabId === 'inventory-calc') updateInventoryView();
-            if (tabId === 'variance-analysis') updateVarianceView();
-            if (tabId === 'target-analysis') updateTargetView();
-            if (tabId === 'water-level') updateWaterLevelView();
-        }
+        document.getElementById('allocationContent').innerHTML = finalPlans.length ? `
+            <div class="mb-4 p-3 bg-green-50 rounded-lg text-sm text-green-700">
+                🚛 生成${finalPlans.length}条调拨建议，可调出库存${suppliers.reduce((s,x)=>s+x.excessQty,0)}辆，需求${demanders.reduce((s,x)=>s+x.needQty,0)}辆
+            </div>
+            <div class="overflow-x-auto"><table class="w-full text-sm">
+                <thead class="bg-gray-50"><tr>
+                    <th class="px-3 py-2">优先级</th><th class="px-3 py-2 text-left">调出方</th><th class="px-3 py-2 text-left">调入方</th>
+                    <th class="px-3 py-2 text-center">数量</th><th class="px-3 py-2 text-right">距离</th><th class="px-3 py-2 text-right">总成本</th><th class="px-3 py-2 text-right">单车成本</th>
+                    <th class="px-3 py-2">风险提示</th><th class="px-3 py-2 text-center">操作</th>
+                </tr></thead>
+                <tbody>${finalPlans.map((p,i)=>{
+                    const pc = p.priority==='高'?'bg-red-100 text-red-700':p.priority==='中'?'bg-yellow-100 text-yellow-700':'bg-gray-100 text-gray-600';
+                    return `<tr class="border-b hover:bg-gray-50">
+                        <td class="px-3 py-2"><span class="px-2 py-0.5 rounded text-xs font-bold ${pc}">${p.priority}</span></td>
+                        <td class="px-3 py-2"><div class="font-medium">${p.from}</div><div class="text-xs text-gray-500">${p.fromCity}${p.sameCity?'':' 🚄'}</div></td>
+                        <td class="px-3 py-2"><div class="font-medium">${p.to}</div><div class="text-xs text-gray-500">${p.toCity}</div></td>
+                        <td class="px-3 py-2 text-center font-bold text-lg">${p.actualQty}</td>
+                        <td class="px-3 py-2 text-right">${p.dist}km</td>
+                        <td class="px-3 py-2 text-right">¥${p.cost}</td>
+                        <td class="px-3 py-2 text-right ${p.costPerCar>300?'text-red-600':'text-gray-600'}">¥${p.costPerCar}</td>
+                        <td class="px-3 py-2 text-xs ${p.riskWarning?'text-orange-600':'text-green-600'}">${p.riskWarning||'✅ 同城调拨，风险较低'}</td>
+                        <td class="px-3 py-2 text-center"><button onclick="createAllocWorkorder(${JSON.stringify(p).replace(/"/g,'&quot;')})" class="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs hover:bg-orange-200">📋 工单</button></td>
+                    </tr>`;
+                }).join('')}</tbody>
+            </table></div>
+        ` : '<div class="text-center py-8 text-gray-500">😐 当前无可执行调拨计划。各门店供需平衡或距离超出限制。</div>';
+    }
 
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
-            if (file) processFile(file);
-        }
+    function renderWaterLevel() {
+        const stats = getStoreStats();
+        const container = document.getElementById('waterLevelContent');
+        if(!Object.keys(stats).length) { container.innerHTML='<p class="text-gray-400 text-center py-8">请先导入数据</p>'; return; }
+        const latestByStore = {};
+        [...inventoryData].sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>latestByStore[r.store]=r);
 
-        function processFile(file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-                    
-                    const parsedData = jsonData.map(row => ({
-                        store: row['门店'] || row['门店名称'] || row['store'] || '',
-                        date: formatDate(row['日期'] || row['date'] || ''),
-                        opening: Number(row['期初库存'] || row['opening'] || 0),
-                        capacity: Number(row['库位数'] || row['capacity'] || 100),
-                        targetIn: Number(row['收车目标'] || row['targetIn'] || 0),
-                        targetOut: Number(row['售车目标'] || row['targetOut'] || 0),
-                        actualIn: Number(row['实际收车'] || row['actualIn'] || 0),
-                        actualOut: Number(row['实际售车'] || row['actualOut'] || 0),
-                        actualStock: Number(row['实际库存'] || row['actualStock'] || 0)
-                    })).filter(row => row.store);
-
-                    inventoryData = inventoryData.concat(parsedData);
-                    updateDataTable();
-                    alert(`成功导入 ${parsedData.length} 条数据！`);
-                } catch (err) {
-                    alert('文件解析失败，请检查文件格式：' + err.message);
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        function formatDate(dateVal) {
-            if (!dateVal) return '';
-            if (typeof dateVal === 'number') {
-                const date = new Date((dateVal - 25569) * 86400 * 1000);
-                return date.toISOString().split('T')[0];
-            }
-            const date = new Date(dateVal);
-            if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
-            return String(dateVal);
-        }
-
-        function addManualData() {
-            const store = document.getElementById('manual-store').value.trim();
-            const date = document.getElementById('manual-date').value;
-            const opening = Number(document.getElementById('manual-opening').value) || 0;
-            const capacity = Number(document.getElementById('manual-capacity').value) || 100;
-            const targetIn = Number(document.getElementById('manual-target-in').value) || 0;
-            const targetOut = Number(document.getElementById('manual-target-out').value) || 0;
-            const actualIn = Number(document.getElementById('manual-actual-in').value) || 0;
-            const actualOut = Number(document.getElementById('manual-actual-out').value) || 0;
-            const actualStock = Number(document.getElementById('manual-actual-stock').value) || 0;
-
-            if (!store) { alert('请输入门店名称'); return; }
-            if (!date) { alert('请选择日期'); return; }
-
-            inventoryData.push({ store, date, opening, capacity, targetIn, targetOut, actualIn, actualOut, actualStock });
-            updateDataTable();
-
-            document.getElementById('manual-store').value = '';
-            document.getElementById('manual-opening').value = '';
-            document.getElementById('manual-target-in').value = '';
-            document.getElementById('manual-target-out').value = '';
-            document.getElementById('manual-actual-in').value = '';
-            document.getElementById('manual-actual-out').value = '';
-            document.getElementById('manual-actual-stock').value = '';
-        }
-
-        function deleteRow(index) {
-            inventoryData.splice(index, 1);
-            updateDataTable();
-        }
-
-        function clearAllData() {
-            if (confirm('确定要清空所有数据吗？')) {
-                inventoryData = [];
-                updateDataTable();
-            }
-        }
-
-        function updateDataTable() {
-            const tbody = document.getElementById('dataTableBody');
-            if (inventoryData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-gray-400">暂无数据，请上传文件或手工录入</td></tr>';
-                document.getElementById('dataSummary').textContent = '';
-                return;
-            }
-
-            tbody.innerHTML = inventoryData.map((row, idx) => `
-                <tr class="border-b border-gray-100 hover:bg-gray-50">
-                    <td class="px-4 py-3">${row.store}</td>
-                    <td class="px-4 py-3">${row.date}</td>
-                    <td class="px-4 py-3 text-right">${row.opening}</td>
-                    <td class="px-4 py-3 text-right">${row.capacity}</td>
-                    <td class="px-4 py-3 text-right">${row.targetIn}</td>
-                    <td class="px-4 py-3 text-right">${row.targetOut}</td>
-                    <td class="px-4 py-3 text-right">${row.actualIn}</td>
-                    <td class="px-4 py-3 text-right">${row.actualOut}</td>
-                    <td class="px-4 py-3 text-right">${row.actualStock}</td>
-                    <td class="px-4 py-3 text-center">
-                        <button onclick="deleteRow(${idx})" class="text-red-500 hover:text-red-700">删除</button>
-                    </td>
-                </tr>
-            `).join('');
-
-            const stores = [...new Set(inventoryData.map(d => d.store))];
-            document.getElementById('dataSummary').textContent = `共 ${inventoryData.length} 条记录，涉及 ${stores.length} 个门店`;
-        }
-
-        function calculateTheoreticalStock(row) {
-            return row.opening + row.actualIn - row.actualOut;
-        }
-
-        function updateInventoryView() {
-            const tbody = document.getElementById('inventoryTableBody');
-            if (inventoryData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">请先导入数据</td></tr>';
-                document.getElementById('inventorySummary').innerHTML = '<p class="text-gray-400 text-center py-8">请先导入数据</p>';
-                return;
-            }
-
-            const rows = inventoryData.map(row => {
-                const theoretical = calculateTheoreticalStock(row);
-                const variance = row.actualStock - theoretical;
-                let statusClass = 'bg-green-100 text-green-700';
-                let statusText = '✓ 一致';
-                if (variance > 0) { statusClass = 'bg-yellow-100 text-yellow-700'; statusText = '⚠️ 多车'; }
-                if (variance < 0) { statusClass = 'bg-red-100 text-red-700'; statusText = '⚠️ 少车'; }
-
-                return { ...row, theoretical, variance, statusClass, statusText };
-            });
-
-            tbody.innerHTML = rows.map(row => `
-                <tr class="border-b border-gray-100 hover:bg-gray-50">
-                    <td class="px-4 py-3">${row.store}</td>
-                    <td class="px-4 py-3">${row.date}</td>
-                    <td class="px-4 py-3 text-right">${row.opening}</td>
-                    <td class="px-4 py-3 text-right text-green-600">+${row.actualIn}</td>
-                    <td class="px-4 py-3 text-right text-red-600">-${row.actualOut}</td>
-                    <td class="px-4 py-3 text-right font-semibold">${row.theoretical}</td>
-                    <td class="px-4 py-3 text-right">${row.actualStock}</td>
-                    <td class="px-4 py-3 text-right font-semibold ${row.variance > 0 ? 'text-yellow-600' : row.variance < 0 ? 'text-red-600' : 'text-green-600'}">${row.variance > 0 ? '+' : ''}${row.variance}</td>
-                    <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded-full text-xs ${row.statusClass}">${row.statusText}</span></td>
-                </tr>
-            `).join('');
-
-            const totalTheoretical = rows.reduce((sum, r) => sum + r.theoretical, 0);
-            const totalActual = rows.reduce((sum, r) => sum + r.actualStock, 0);
-            const stores = [...new Set(rows.map(r => r.store))].length;
-
-            document.getElementById('inventorySummary').innerHTML = `
-                <div class="flex justify-between py-2 border-b"><span class="text-gray-600">门店总数</span><span class="font-semibold">${stores}</span></div>
-                <div class="flex justify-between py-2 border-b"><span class="text-gray-600">记录总数</span><span class="font-semibold">${rows.length}</span></div>
-                <div class="flex justify-between py-2 border-b"><span class="text-gray-600">理论库存合计</span><span class="font-semibold text-blue-600">${totalTheoretical} 辆</span></div>
-                <div class="flex justify-between py-2 border-b"><span class="text-gray-600">实际库存合计</span><span class="font-semibold">${totalActual} 辆</span></div>
-                <div class="flex justify-between py-2"><span class="text-gray-600">整体差异</span><span class="font-semibold ${totalActual - totalTheoretical !== 0 ? 'text-red-600' : 'text-green-600'}">${totalActual - totalTheoretical > 0 ? '+' : ''}${totalActual - totalTheoretical} 辆</span></div>
-            `;
-
-            renderInventoryChart(rows);
-        }
-
-        function renderInventoryChart(rows) {
-            const ctx = document.getElementById('inventoryTrendChart').getContext('2d');
-            if (charts.inventory) charts.inventory.destroy();
-
-            const labels = rows.map(r => r.store + '-' + r.date.slice(5));
-            charts.inventory = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        { label: '理论库存', data: rows.map(r => r.theoretical), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.3 },
-                        { label: '实际库存', data: rows.map(r => r.actualStock), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', fill: true, tension: 0.3 }
-                    ]
-                },
-                options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
-            });
-        }
-
-        let currentVarianceFilter = 'all';
-
-        function filterVariance(filter) {
-            currentVarianceFilter = filter;
-            document.querySelectorAll('.variance-filter').forEach(btn => {
-                btn.classList.remove('bg-blue-600', 'text-white');
-                btn.classList.add('bg-gray-200', 'text-gray-700');
-            });
-            document.querySelector(`[data-filter="${filter}"]`).classList.remove('bg-gray-200', 'text-gray-700');
-            document.querySelector(`[data-filter="${filter}"]`).classList.add('bg-blue-600', 'text-white');
-            updateVarianceView();
-        }
-
-        function getPossibleReason(variance, row) {
-            if (variance === 0) return '-';
-            if (variance < 0) {
-                const reasons = ['车辆未登记出库', '调拨记录缺失', '销售数据未录入', '盘点错误', '车辆丢失/异常'];
-                return reasons[Math.floor(Math.random() * reasons.length)] + '（建议核查出入库记录）';
-            }
-            return '入库未登记/调拨未录入/盘点错误（建议核查入库记录）';
-        }
-
-        function updateVarianceView() {
-            const tbody = document.getElementById('varianceTableBody');
-            if (inventoryData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">请先导入数据</td></tr>';
-                ['totalRecords', 'matchRecords', 'shortageRecords', 'surplusRecords'].forEach(id => document.getElementById(id).textContent = '0');
-                document.getElementById('problemStores').innerHTML = '<p class="text-gray-400 text-center py-8">请先导入数据</p>';
-                return;
-            }
-
-            let rows = inventoryData.map(row => {
-                const theoretical = calculateTheoreticalStock(row);
-                const variance = row.actualStock - theoretical;
-                const varianceRate = theoretical > 0 ? ((variance / theoretical) * 100).toFixed(1) : '0.0';
-                let status = 'match';
-                if (variance < 0) status = 'shortage';
-                if (variance > 0) status = 'surplus';
-                return { ...row, theoretical, variance, varianceRate, status, reason: getPossibleReason(variance, row) };
-            });
-
-            if (currentVarianceFilter !== 'all') rows = rows.filter(r => r.status === currentVarianceFilter);
-
-            document.getElementById('totalRecords').textContent = inventoryData.length;
-            document.getElementById('matchRecords').textContent = inventoryData.filter(r => calculateTheoreticalStock(r) === r.actualStock).length;
-            document.getElementById('shortageRecords').textContent = inventoryData.filter(r => r.actualStock < calculateTheoreticalStock(r)).length;
-            document.getElementById('surplusRecords').textContent = inventoryData.filter(r => r.actualStock > calculateTheoreticalStock(r)).length;
-
-            tbody.innerHTML = rows.map(row => {
-                let statusClass = 'bg-green-100 text-green-700';
-                let statusText = '✓ 一致';
-                if (row.variance > 0) { statusClass = 'bg-yellow-100 text-yellow-700'; statusText = '⚠️ 盘盈'; }
-                if (row.variance < 0) { statusClass = 'bg-red-100 text-red-700'; statusText = '⚠️ 盘亏'; }
-                return `
-                    <tr class="border-b border-gray-100 hover:bg-gray-50">
-                        <td class="px-4 py-3">${row.store}</td>
-                        <td class="px-4 py-3">${row.date}</td>
-                        <td class="px-4 py-3 text-right">${row.theoretical}</td>
-                        <td class="px-4 py-3 text-right">${row.actualStock}</td>
-                        <td class="px-4 py-3 text-right font-semibold ${row.variance > 0 ? 'text-yellow-600' : row.variance < 0 ? 'text-red-600' : 'text-green-600'}">${row.variance > 0 ? '+' : ''}${row.variance}</td>
-                        <td class="px-4 py-3 text-right">${row.varianceRate}%</td>
-                        <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded-full text-xs ${row.statusClass}">${statusText}</span></td>
-                        <td class="px-4 py-3 text-sm text-gray-600">${row.reason}</td>
-                    </tr>
-                `;
-            }).join('');
-
-            const storeVariances = {};
-            inventoryData.forEach(row => {
-                const variance = Math.abs(row.actualStock - calculateTheoreticalStock(row));
-                storeVariances[row.store] = (storeVariances[row.store] || 0) + variance;
-            });
-            const sortedStores = Object.entries(storeVariances).sort((a, b) => b[1] - a[1]).slice(0, 5);
-            
-            document.getElementById('problemStores').innerHTML = sortedStores.map(([store, totalVar], idx) => `
-                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div class="flex items-center gap-3">
-                        <span class="w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-sm font-bold">${idx + 1}</span>
-                        <span class="font-medium">${store}</span>
-                    </div>
-                    <span class="text-red-600 font-semibold">累计差异 ${totalVar} 辆</span>
+        const cards = Object.values(stats).map(s => {
+            const latest = latestByStore[s.store];
+            if(!latest) return '';
+            const util = latest.actualStock/latest.capacity*100;
+            let status = { level:'健康', color:'#22c55e', bg:'bg-green-50', text:'text-green-700' };
+            if(util<params.low) status={level:'空置',color:'#9ca3af',bg:'bg-gray-50',text:'text-gray-600'};
+            else if(util<params.healthy) status={level:'偏低',color:'#ef4444',bg:'bg-red-50',text:'text-red-700'};
+            else if(util>100) status={level:'溢出',color:'#dc2626',bg:'bg-red-50',text:'text-red-700'};
+            else if(util>params.high) status={level:'偏高',color:'#f59e0b',bg:'bg-yellow-50',text:'text-yellow-700'};
+            const strats = generateStrategies(s, latest, util, status);
+            return `
+            <div class="border rounded-lg p-4">
+                <div class="flex justify-between items-start mb-3">
+                    <div><h4 class="font-bold text-gray-800">${s.store}</h4><p class="text-xs text-gray-500">${latest.date} · ${s.city}</p></div>
+                    <span class="px-2 py-0.5 rounded-full text-xs font-medium ${status.bg} ${status.text}">${status.level}</span>
                 </div>
-            `).join('');
-
-            renderVarianceChart();
-        }
-
-        function renderVarianceChart() {
-            const ctx = document.getElementById('varianceChart').getContext('2d');
-            if (charts.variance) charts.variance.destroy();
-
-            const match = inventoryData.filter(r => calculateTheoreticalStock(r) === r.actualStock).length;
-            const shortage = inventoryData.filter(r => r.actualStock < calculateTheoreticalStock(r)).length;
-            const surplus = inventoryData.filter(r => r.actualStock > calculateTheoreticalStock(r)).length;
-
-            charts.variance = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['一致', '盘亏（少车）', '盘盈（多车）'],
-                    datasets: [{ data: [match, shortage, surplus], backgroundColor: ['#22c55e', '#ef4444', '#f59e0b'] }]
-                },
-                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
-            });
-        }
-
-        function getAchievementRate(actual, target) {
-            if (target === 0) return 100;
-            return Math.round((actual / target) * 100);
-        }
-
-        function getRating(inRate, outRate) {
-            const avg = (inRate + outRate) / 2;
-            if (avg >= 120) return { text: 'S', class: 'bg-purple-100 text-purple-700' };
-            if (avg >= 100) return { text: 'A', class: 'bg-green-100 text-green-700' };
-            if (avg >= 80) return { text: 'B', class: 'bg-blue-100 text-blue-700' };
-            if (avg >= 60) return { text: 'C', class: 'bg-yellow-100 text-yellow-700' };
-            return { text: 'D', class: 'bg-red-100 text-red-700' };
-        }
-
-        function updateTargetView() {
-            const tbody = document.getElementById('targetTableBody');
-            if (inventoryData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">请先导入数据</td></tr>';
-                ['totalTargetIn', 'totalActualIn', 'totalTargetOut', 'totalActualOut'].forEach(id => document.getElementById(id).textContent = '0');
-                document.getElementById('inRanking').innerHTML = '';
-                document.getElementById('outRanking').innerHTML = '';
-                return;
-            }
-
-            const rows = inventoryData.map(row => {
-                const inRate = getAchievementRate(row.actualIn, row.targetIn);
-                const outRate = getAchievementRate(row.actualOut, row.targetOut);
-                const rating = getRating(inRate, outRate);
-                return { ...row, inRate, outRate, rating };
-            });
-
-            document.getElementById('totalTargetIn').textContent = rows.reduce((s, r) => s + r.targetIn, 0);
-            document.getElementById('totalActualIn').textContent = rows.reduce((s, r) => s + r.actualIn, 0);
-            document.getElementById('totalTargetOut').textContent = rows.reduce((s, r) => s + r.targetOut, 0);
-            document.getElementById('totalActualOut').textContent = rows.reduce((s, r) => s + r.actualOut, 0);
-
-            tbody.innerHTML = rows.map(row => {
-                const rateClass = rate => rate >= 100 ? 'text-green-600' : rate >= 80 ? 'text-yellow-600' : 'text-red-600';
-                return `
-                    <tr class="border-b border-gray-100 hover:bg-gray-50">
-                        <td class="px-4 py-3">${row.store}</td>
-                        <td class="px-4 py-3">${row.date}</td>
-                        <td class="px-4 py-3 text-right">${row.targetIn}</td>
-                        <td class="px-4 py-3 text-right">${row.actualIn}</td>
-                        <td class="px-4 py-3 text-right font-semibold ${rateClass(row.inRate)}">${row.inRate}%</td>
-                        <td class="px-4 py-3 text-right">${row.targetOut}</td>
-                        <td class="px-4 py-3 text-right">${row.actualOut}</td>
-                        <td class="px-4 py-3 text-right font-semibold ${rateClass(row.outRate)}">${row.outRate}%</td>
-                        <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded text-xs font-bold ${row.rating.class}">${row.rating.text}</span></td>
-                    </tr>
-                `;
-            }).join('');
-
-            renderTargetCharts(rows);
-            renderRankings(rows);
-        }
-
-        function renderTargetCharts(rows) {
-            const labels = rows.map(r => r.store + '-' + r.date.slice(5));
-
-            const ctxIn = document.getElementById('inTargetChart').getContext('2d');
-            if (charts.inTarget) charts.inTarget.destroy();
-            charts.inTarget = new Chart(ctxIn, {
-                type: 'bar',
-                data: {
-                    labels,
-                    datasets: [
-                        { label: '收车目标', data: rows.map(r => r.targetIn), backgroundColor: 'rgba(59,130,246,0.5)', borderColor: '#3b82f6', borderWidth: 1 },
-                        { label: '实际收车', data: rows.map(r => r.actualIn), backgroundColor: 'rgba(34,197,94,0.7)', borderColor: '#22c55e', borderWidth: 1 }
-                    ]
-                },
-                options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
-            });
-
-            const ctxOut = document.getElementById('outTargetChart').getContext('2d');
-            if (charts.outTarget) charts.outTarget.destroy();
-            charts.outTarget = new Chart(ctxOut, {
-                type: 'bar',
-                data: {
-                    labels,
-                    datasets: [
-                        { label: '售车目标', data: rows.map(r => r.targetOut), backgroundColor: 'rgba(168,85,247,0.5)', borderColor: '#a855f7', borderWidth: 1 },
-                        { label: '实际售车', data: rows.map(r => r.actualOut), backgroundColor: 'rgba(249,115,22,0.7)', borderColor: '#f97316', borderWidth: 1 }
-                    ]
-                },
-                options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
-            });
-        }
-
-        function renderRankings(rows) {
-            const storeStats = {};
-            rows.forEach(row => {
-                if (!storeStats[row.store]) storeStats[row.store] = { totalTargetIn: 0, totalActualIn: 0, totalTargetOut: 0, totalActualOut: 0 };
-                storeStats[row.store].totalTargetIn += row.targetIn;
-                storeStats[row.store].totalActualIn += row.actualIn;
-                storeStats[row.store].totalTargetOut += row.targetOut;
-                storeStats[row.store].totalActualOut += row.actualOut;
-            });
-
-            const inRanking = Object.entries(storeStats).map(([store, stats]) => ({
-                store, rate: getAchievementRate(stats.totalActualIn, stats.totalTargetIn)
-            })).sort((a, b) => b.rate - a.rate);
-
-            const outRanking = Object.entries(storeStats).map(([store, stats]) => ({
-                store, rate: getAchievementRate(stats.totalActualOut, stats.totalTargetOut)
-            })).sort((a, b) => b.rate - a.rate);
-
-            const renderRankingItem = (item, idx, colorClass) => {
-                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`;
-                const rateColor = item.rate >= 100 ? 'text-green-600' : item.rate >= 80 ? 'text-yellow-600' : 'text-red-600';
-                return `
-                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 text-center">${medal}</span>
-                            <span class="font-medium">${item.store}</span>
-                        </div>
-                        <span class="${rateColor} font-semibold">${item.rate}%</span>
+                <div class="flex items-center gap-4 mb-3">
+                    <div class="w-12 h-20 border-2 border-gray-300 rounded-b relative overflow-hidden bg-gray-100">
+                        <div class="absolute bottom-0 left-0 right-0 transition-all" style="height:${Math.min(util,110)}%;background-color:${status.color}"></div>
                     </div>
-                `;
-            };
-
-            document.getElementById('inRanking').innerHTML = inRanking.map((item, idx) => renderRankingItem(item, idx)).join('');
-            document.getElementById('outRanking').innerHTML = outRanking.map((item, idx) => renderRankingItem(item, idx)).join('');
-        }
-
-        function getWaterLevelStatus(stock, capacity) {
-            const ratio = capacity > 0 ? (stock / capacity) : 0;
-            const percentage = Math.round(ratio * 100);
-            if (ratio < 0.3) return { level: '空置区', percentage, class: 'water-level-low', textClass: 'text-gray-600', color: '#9ca3af' };
-            if (ratio < 0.5) return { level: '低水位', percentage, class: 'water-level-low', textClass: 'text-red-600', color: '#ef4444' };
-            if (ratio < 0.8) return { level: '健康水位', percentage, class: 'water-level-normal', textClass: 'text-green-600', color: '#22c55e' };
-            if (ratio <= 1) return { level: '高水位', percentage, class: 'water-level-high', textClass: 'text-yellow-600', color: '#f59e0b' };
-            return { level: '溢出风险', percentage, class: 'water-level-over', textClass: 'text-red-700', color: '#dc2626' };
-        }
-
-        function generateStrategy(row, status) {
-            const ratio = status.percentage / 100;
-            const strategies = [];
-            
-            if (ratio < 0.3) {
-                strategies.push({ icon: '🔴', priority: '紧急', title: '库位严重空置', action: '加大收车力度，增加采购渠道；考虑临时调整库位数或共享库位', color: 'bg-red-50 border-red-200' });
-                strategies.push({ icon: '📢', priority: '建议', title: '销售端稳定', action: '保持当前销售节奏，避免过快去库存导致空仓', color: 'bg-yellow-50 border-yellow-200' });
-            } else if (ratio < 0.5) {
-                strategies.push({ icon: '🟠', priority: '关注', title: '库存偏低', action: '适当增加收车量，补充热销车型库存', color: 'bg-orange-50 border-orange-200' });
-                strategies.push({ icon: '⚠️', priority: '注意', title: '防止断档', action: '关注畅销车型库存，避免无车可卖', color: 'bg-yellow-50 border-yellow-200' });
-            } else if (ratio < 0.8) {
-                strategies.push({ icon: '🟢', priority: '良好', title: '库存健康', action: '维持当前收售节奏，保持良性周转', color: 'bg-green-50 border-green-200' });
-                strategies.push({ icon: '✅', priority: '保持', title: '优化结构', action: '关注车龄结构，及时处理长库龄车辆', color: 'bg-blue-50 border-blue-200' });
-            } else if (ratio <= 1) {
-                strategies.push({ icon: '🟡', priority: '警示', title: '库存偏高', action: '加大促销力度，开展营销活动加速去化', color: 'bg-yellow-50 border-yellow-200' });
-                strategies.push({ icon: '🛑', priority: '控制', title: '收车管控', action: '适当控制收车节奏，优先收畅销车型', color: 'bg-orange-50 border-orange-200' });
-            } else {
-                strategies.push({ icon: '🔴', priority: '紧急', title: '库位溢出', action: '立即停止收车，全力促销；考虑临时外租库位或调拨至其他门店', color: 'bg-red-50 border-red-200' });
-                strategies.push({ icon: '💰', priority: '促销', title: '降价清库', action: '启动清库专项政策，设置销售激励，加快资金回笼', color: 'bg-red-100 border-red-300' });
-            }
-
-            if (row.targetIn > 0 && row.actualIn < row.targetIn * 0.8) {
-                strategies.push({ icon: '📥', priority: '收车', title: '收车未达标', action: `收车达成率仅${getAchievementRate(row.actualIn, row.targetIn)}%，需加强车源拓展`, color: 'bg-blue-50 border-blue-200' });
-            }
-            if (row.targetOut > 0 && row.actualOut < row.targetOut * 0.8) {
-                strategies.push({ icon: '📤', priority: '售车', title: '售车未达标', action: `售车达成率仅${getAchievementRate(row.actualOut, row.targetOut)}%，需加强销售转化`, color: 'bg-purple-50 border-purple-200' });
-            }
-
-            return strategies;
-        }
-
-        function updateWaterLevelView() {
-            const cardsContainer = document.getElementById('waterLevelCards');
-            const strategyContainer = document.getElementById('strategySummary');
-            
-            if (inventoryData.length === 0) {
-                cardsContainer.innerHTML = '<div class="col-span-full text-center py-8 text-gray-400">请先导入数据</div>';
-                strategyContainer.innerHTML = '<p class="text-gray-400 text-center py-8">请先导入数据</p>';
-                return;
-            }
-
-            const latestByStore = {};
-            inventoryData.forEach(row => {
-                const key = row.store;
-                if (!latestByStore[key] || row.date > latestByStore[key].date) {
-                    latestByStore[key] = row;
-                }
-            });
-
-            const storeData = Object.values(latestByStore).map(row => {
-                const status = getWaterLevelStatus(row.actualStock, row.capacity);
-                const strategies = generateStrategy(row, status);
-                return { ...row, status, strategies };
-            });
-
-            cardsContainer.innerHTML = storeData.map(row => {
-                const levelStyle = `--level: ${Math.min(row.status.percentage, 100)}%`;
-                return `
-                    <div class="border rounded-lg overflow-hidden">
-                        <div class="p-4">
-                            <div class="flex justify-between items-start mb-2">
-                                <div>
-                                    <h4 class="font-semibold text-gray-800">${row.store}</h4>
-                                    <p class="text-xs text-gray-500">${row.date}</p>
-                                </div>
-                                <span class="px-2 py-1 rounded-full text-xs font-medium ${row.status.textClass} bg-gray-100">${row.status.level}</span>
-                            </div>
-                            <div class="flex items-end gap-4 my-4">
-                                <div class="w-16 h-24 border-2 border-gray-300 rounded-b-lg relative overflow-hidden ${row.status.class}" style="${levelStyle}">
-                                    <div class="absolute bottom-0 left-0 right-0 transition-all duration-500" style="height: ${Math.min(row.status.percentage, 100)}%"></div>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="text-3xl font-bold ${row.status.textClass}">${row.status.percentage}%</div>
-                                    <div class="text-sm text-gray-600">${row.actualStock} / ${row.capacity} 库位</div>
-                                    <div class="text-xs text-gray-400 mt-1">理论库存: ${calculateTheoreticalStock(row)}</div>
-                                </div>
-                            </div>
-                            <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
-                                <div class="h-2 rounded-full transition-all duration-500" style="width: ${Math.min(row.status.percentage, 100)}%; background-color: ${row.status.color}"></div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            const allStrategies = storeData.flatMap(row => 
-                row.strategies.map(s => ({ ...s, store: row.store }))
-            );
-
-            const priorityOrder = { '紧急': 0, '警示': 1, '关注': 2, '控制': 3, '收车': 4, '售车': 5, '促销': 6, '建议': 7, '保持': 8, '良好': 9 };
-            allStrategies.sort((a, b) => (priorityOrder[a.priority] || 99) - (priorityOrder[b.priority] || 99));
-
-            strategyContainer.innerHTML = allStrategies.map(s => `
-                <div class="border-l-4 ${s.color} border rounded-lg p-4">
-                    <div class="flex items-start gap-3">
-                        <span class="text-xl">${s.icon}</span>
-                        <div class="flex-1">
-                            <div class="flex items-center gap-2 mb-1">
-                                <span class="font-semibold text-gray-800">${s.title}</span>
-                                <span class="px-2 py-0.5 rounded text-xs font-medium bg-white border">${s.priority}</span>
-                                <span class="text-sm text-gray-500">- ${s.store}</span>
-                            </div>
-                            <p class="text-sm text-gray-600">${s.action}</p>
-                        </div>
+                    <div class="flex-1">
+                        <div class="text-3xl font-bold" style="color:${status.color}">${util.toFixed(0)}%</div>
+                        <div class="text-sm text-gray-600">${latest.actualStock} / ${latest.capacity}</div>
+                        <div class="text-xs text-gray-400">月周转${s.avgTurnover.toFixed(1)}次 · ${s.profile.label}</div>
                     </div>
                 </div>
-            `).join('');
+                <div class="w-full bg-gray-200 rounded-full h-2 mb-3"><div class="h-2 rounded-full" style="width:${Math.min(util,100)}%;background-color:${status.color}"></div></div>
+                <div class="space-y-2">
+                    ${strats.map(st=>`<div class="flex items-start gap-2 p-2 ${st.bg} rounded text-xs"><span>${st.icon}</span><div class="flex-1"><div class="font-medium">${st.title}</div><div class="text-gray-600">${st.action}</div></div><button onclick="createStrategyWorkorder('${s.store}','${st.type}','${st.title}','${st.action}',${util.toFixed(0)})" class="px-2 py-0.5 bg-white border rounded text-orange-600 hover:bg-orange-50 shrink-0">📋</button></div>`).join('')}
+                </div>
+            </div>`;
+        }).join('');
+        container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${cards}</div>`;
+    }
 
-            renderWaterLevelChart(storeData);
+    function generateStrategies(s, latest, util, status) {
+        const res = [];
+        if(util<params.low) {
+            res.push({icon:'🔴',type:'urgent_in',title:'库位严重空置',action:'加大收车力度，拓展车源渠道；考虑缩库或共享库位',bg:'bg-red-50'});
+        } else if(util<params.healthy) {
+            if(s.profile.type==='sales_strong') res.push({icon:'🟠',type:'increase_in',title:'库存偏低（售强收弱）',action:'重点增加收车，补充畅销车源，保障供给',bg:'bg-orange-50'});
+            else res.push({icon:'🟡',type:'increase_in',title:'库存偏低',action:'适当增加收车量，保障销售供应',bg:'bg-yellow-50'});
+        } else if(util>100) {
+            res.push({icon:'🔴',type:'urgent_out',title:'库位溢出！',action:'立即停止收车，启动清库促销；调拨至其他门店或外租库位',bg:'bg-red-50'});
+            res.push({icon:'💰',type:'promo',title:'紧急降价清库',action:'设置专项激励，加快资金回笼',bg:'bg-red-100'});
+        } else if(util>params.high) {
+            if(s.profile.type==='collection_strong') res.push({icon:'🟡',type:'increase_out',title:'库存偏高（收强售弱）',action:'重点提升销售能力，开展营销活动，适当控制收车节奏',bg:'bg-yellow-50'});
+            else if(s.profile.type==='healthy' && s.avgTurnover>=6) res.push({icon:'🟢',type:'maintain',title:'高周转高水位（健康）',action:'维持当前节奏，此门店可承受高水位运营',bg:'bg-green-50'});
+            else res.push({icon:'🟡',type:'decrease_in',title:'库存偏高',action:'加大促销，适当控制收车',bg:'bg-yellow-50'});
+        } else {
+            res.push({icon:'🟢',type:'maintain',title:'库存健康',action:'维持当前收售节奏，关注车龄结构',bg:'bg-green-50'});
         }
+        if(s.inRate<80 && util<params.high) res.push({icon:'📥',type:'improve_in',title:`收车达成率${s.inRate}%偏低`,action:'加强车源拓展，优化收车渠道',bg:'bg-blue-50'});
+        if(s.outRate<80 && util>params.healthy) res.push({icon:'📤',type:'improve_out',title:`售车达成率${s.outRate}%偏低`,action:'加强销售转化，优化销售话术/定价',bg:'bg-purple-50'});
+        return res;
+    }
 
-        function renderWaterLevelChart(storeData) {
-            const ctx = document.getElementById('waterLevelChart').getContext('2d');
-            if (charts.waterLevel) charts.waterLevel.destroy();
+    function createWorkorder(type, title, desc, priority, store, data) {
+        const wo = { id:'WO'+Date.now(), type, title, desc, priority, store, data, status:'pending', createdAt:new Date().toISOString().slice(0,16).replace('T',' '), feedback:null, result:null };
+        workorders.push(wo);
+        saveToStorage();
+        updateWorkorderBadge();
+        alert(`✅ 工单已创建：${title}\n可在「工单中心」查看和处理`);
+        switchTab('workorder');
+    }
+    function createCapacityWorkorder(store,cur,rec,reason) {
+        createWorkorder('capacity','库位调整建议',`${store}：当前${cur}个库位，建议${rec>cur?'增加':'缩减'}为${rec}个（变化${rec-cur>0?'+':''}${rec-cur}）。原因：${reason}`,'中',store,{cur,rec,delta:rec-cur});
+    }
+    function createAllocWorkorder(p) {
+        createWorkorder('allocation','车辆调拨计划',`${p.from}(${p.fromCity}) → ${p.to}(${p.toCity})：调拨${p.actualQty}辆，距离${p.dist}km，预估成本¥${p.cost}。${p.riskWarning||'同城调拨'}。`,'高',p.from+'→'+p.to,p);
+    }
+    function createStrategyWorkorder(store,type,title,action,util) {
+        createWorkorder('strategy',`[${store}] ${title}`,`${store}当前水位${util}%：${action}`,'中',store,{type,util});
+    }
 
-            charts.waterLevel = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: storeData.map(r => r.store),
-                    datasets: [
-                        { label: '实际库存', data: storeData.map(r => r.actualStock), backgroundColor: storeData.map(r => r.status.color), borderColor: storeData.map(r => r.status.color), borderWidth: 1 },
-                        { label: '库位数', data: storeData.map(r => r.capacity), type: 'line', borderColor: '#374151', borderDash: [5, 5], fill: false, pointBackgroundColor: '#374151' }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { position: 'top' } },
-                    scales: { y: { beginAtZero: true, title: { display: true, text: '车辆数' } } }
-                }
+    function updateWorkorderBadge() {
+        const pending = workorders.filter(w=>w.status==='pending').length;
+        const b = document.getElementById('workorderBadge');
+        if(pending>0) { b.textContent=pending; b.classList.remove('hidden'); } else b.classList.add('hidden');
+    }
+
+    function renderWorkorders() {
+        const filter = document.getElementById('workorderFilter').value;
+        let list = workorders;
+        if(filter!=='all') list = list.filter(w=>w.status===filter);
+        list = list.sort((a,b)=>{
+            const s = {pending:0,accepted:1,done:2,rejected:3};
+            return s[a.status]-s[b.status] || b.createdAt.localeCompare(a.createdAt);
+        });
+        document.getElementById('woPending').textContent = workorders.filter(w=>w.status==='pending').length;
+        document.getElementById('woAccepted').textContent = workorders.filter(w=>w.status==='accepted').length;
+        document.getElementById('woDone').textContent = workorders.filter(w=>w.status==='done').length;
+        const completed = workorders.filter(w=>w.status==='done'&&w.feedback);
+        const effective = completed.filter(w=>w.feedback==='effective'||w.feedback==='partial').length;
+        document.getElementById('woAccuracy').textContent = completed.length? Math.round(effective/completed.length*100)+'%':'-';
+
+        const typeIcon = {capacity:'📐',allocation:'🔄',strategy:'💡'};
+        const typeName = {capacity:'库位规划',allocation:'车辆调拨',strategy:'运营策略'};
+        const listEl = document.getElementById('workorderList');
+        if(!list.length) { listEl.innerHTML='<p class="text-gray-400 text-center py-8">暂无工单</p>'; return; }
+        listEl.innerHTML = list.map(w=>{
+            const sc = w.status==='pending'?'workorder-pending bg-orange-50':w.status==='accepted'?'workorder-accepted bg-green-50':w.status==='rejected'?'workorder-rejected bg-red-50':'workorder-done bg-blue-50';
+            const statusBtn = w.status==='pending' ? `
+                <div class="flex gap-2 mt-3">
+                    <button onclick="acceptWo('${w.id}')" class="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600">✅ 采纳执行</button>
+                    <button onclick="rejectWo('${w.id}')" class="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600">❌ 驳回</button>
+                </div>` : w.status==='accepted' ? `
+                <div class="flex gap-2 mt-3">
+                    <button onclick="completeWo('${w.id}','effective')" class="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600">👍 效果良好</button>
+                    <button onclick="completeWo('${w.id}','partial')" class="px-3 py-1 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600">🤔 部分有效</button>
+                    <button onclick="completeWo('${w.id}','ineffective')" class="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600">👎 效果不佳</button>
+                </div>` : w.status==='done' ? `
+                <div class="mt-2 text-sm">
+                    <span class="px-2 py-0.5 rounded ${w.feedback==='effective'?'bg-green-100 text-green-700':w.feedback==='partial'?'bg-yellow-100 text-yellow-700':'bg-red-100 text-red-700'}">
+                        ${w.feedback==='effective'?'✓ 效果良好':w.feedback==='partial'?'◐ 部分有效':'✗ 效果不佳'}
+                    </span>
+                    ${w.result?`<span class="text-gray-500 ml-2">${w.result}</span>`:''}
+                </div>` : `<div class="mt-2 text-sm text-red-600">已驳回</div>`;
+            return `<div class="${sc} rounded-lg p-4">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span>${typeIcon[w.type]}</span>
+                            <span class="text-xs px-2 py-0.5 rounded bg-white border">${typeName[w.type]}</span>
+                            <span class="text-xs text-gray-500">${w.createdAt}</span>
+                            <span class="text-xs text-gray-500">门店: ${w.store}</span>
+                        </div>
+                        <h4 class="font-semibold text-gray-800">${w.title}</h4>
+                        <p class="text-sm text-gray-600 mt-1">${w.desc}</p>
+                        ${statusBtn}
+                    </div>
+                    <button onclick="deleteWo('${w.id}')" class="text-gray-400 hover:text-red-500 text-xl">×</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+    function acceptWo(id) { const w=workorders.find(x=>x.id===id); if(w){w.status='accepted';w.acceptedAt=new Date().toISOString();saveToStorage();updateWorkorderBadge();renderWorkorders();} }
+    function rejectWo(id) { const r=prompt('请输入驳回原因（可选）：'); const w=workorders.find(x=>x.id===id); if(w){w.status='rejected';w.result=r||'';saveToStorage();updateWorkorderBadge();renderWorkorders();} }
+    function completeWo(id,feedback) { const r=prompt('执行效果备注（可选，帮助模型改进）：'); const w=workorders.find(x=>x.id===id); if(w){w.status='done';w.feedback=feedback;w.result=r||'';saveToStorage();renderWorkorders();alert('感谢反馈！系统将根据你的评价持续优化建议准确度。');} }
+    function deleteWo(id) { if(confirm('删除工单？')){workorders=workorders.filter(w=>w.id!==id);saveToStorage();updateWorkorderBadge();renderWorkorders();} }
+
+    function renderParamsTab() {
+        const sel = document.getElementById('paramStore');
+        const stores = [...new Set(inventoryData.map(d=>d.store))];
+        sel.innerHTML = '<option value="">选择门店</option>'+stores.map(s=>`<option value="${s}">${s}</option>`).join('');
+        document.getElementById('paramLow').value = params.low;
+        document.getElementById('paramHealthy').value = params.healthy;
+        document.getElementById('paramHigh').value = params.high;
+        document.getElementById('weightTurnover').value = params.weights.turnover;
+        document.getElementById('weightProfile').value = params.weights.profile;
+        document.getElementById('weightTrend').value = params.weights.trend;
+        document.getElementById('weightStrategy').value = params.weights.strategy;
+        document.getElementById('weightTurnoverVal').textContent = params.weights.turnover+'%';
+        document.getElementById('weightProfileVal').textContent = params.weights.profile+'%';
+        document.getElementById('weightTrendVal').textContent = params.weights.trend+'%';
+        document.getElementById('weightStrategyVal').textContent = params.weights.strategy+'%';
+        document.getElementById('storeParamsList').innerHTML = Object.entries(storeParams).map(([s,p])=>`<div class="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full mr-2 mb-1">${s}: <span class="text-purple-600">${p.tag==='shrink'?'缩库':p.tag==='expand'?'扩库':p.tag==='pilot'?'试点':'正常'}</span></div>`).join('') || '暂无门店战略标记';
+    }
+    function saveStoreParams() {
+        const s = document.getElementById('paramStore').value;
+        const tag = document.getElementById('paramStrategyTag').value;
+        if(!s) { alert('请选择门店'); return; }
+        storeParams[s] = { tag };
+        saveToStorage();
+        renderParamsTab();
+        alert('已保存门店战略标记');
+    }
+    function saveAllParams() {
+        params.low = +document.getElementById('paramLow').value;
+        params.healthy = +document.getElementById('paramHealthy').value;
+        params.high = +document.getElementById('paramHigh').value;
+        params.weights = { turnover:+document.getElementById('weightTurnover').value, profile:+document.getElementById('weightProfile').value, trend:+document.getElementById('weightTrend').value, strategy:+document.getElementById('weightStrategy').value };
+        saveToStorage();
+        alert('参数已保存');
+    }
+    function resetParams() {
+        params = { low:30, healthy:50, high:80, weights:{turnover:40,profile:30,trend:20,strategy:10} };
+        saveToStorage(); renderParamsTab();
+    }
+
+    function loadSampleData() {
+        const cities = { '朝阳门店':'北京','海淀门店':'北京','西城门店':'北京','东城门店':'北京','丰台门店':'北京','浦东门店':'上海','徐汇门店':'上海','静安门店':'上海' };
+        const coords = {
+            '朝阳门店':[39.92,116.44],'海淀门店':[39.98,116.30],'西城门店':[39.91,116.36],'东城门店':[39.92,116.41],'丰台门店':[39.85,116.28],
+            '浦东门店':[31.22,121.54],'徐汇门店':[31.19,121.43],'静安门店':[31.23,121.45]
+        };
+        const profiles = {
+            '朝阳门店':{start:55,cap:100,avgIn:10,avgOut:9,tIn:8,tOut:8,type:'healthy'},
+            '海淀门店':{start:75,cap:100,avgIn:8,avgOut:5,tIn:5,tOut:10,type:'collection_strong'},
+            '西城门店':{start:25,cap:80,avgIn:5,avgOut:7,tIn:10,tOut:6,type:'sales_strong'},
+            '东城门店':{start:98,cap:100,avgIn:10,avgOut:4,tIn:5,tOut:12,type:'bottleneck'},
+            '丰台门店':{start:40,cap:90,avgIn:7,avgOut:7,tIn:7,tOut:7,type:'normal'},
+            '浦东门店':{start:60,cap:100,avgIn:9,avgOut:8,tIn:8,tOut:8,type:'healthy'},
+            '徐汇门店':{start:35,cap:80,avgIn:4,avgOut:6,tIn:8,tOut:7,type:'sales_strong'},
+            '静安门店':{start:85,cap:90,avgIn:7,avgOut:4,tIn:5,tOut:9,type:'bottleneck'}
+        };
+        const today = new Date();
+        for(let d=13;d>=0;d--) {
+            const date = new Date(today.getTime()-d*864e5).toISOString().split('T')[0];
+            Object.entries(profiles).forEach(([store,p])=>{
+                const variance = ()=>Math.round((Math.random()-0.5)*4);
+                const actualIn = Math.max(0,p.avgIn+variance());
+                const actualOut = Math.max(0,p.avgOut+variance());
+                const opening = d===13?p.start:0;
+                const actualStock = d===13?p.start : Math.max(10, Math.min(p.cap+10, (inventoryData.find(x=>x.store===store&&x.date===new Date(today.getTime()-(d+1)*864e5).toISOString().split('T')[0])?.actualStock||p.start)+actualIn-actualOut));
+                inventoryData.push({store,city:cities[store],date,opening:opening||(inventoryData.find(x=>x.store===store&&x.date<date)?.actualStock||p.start),capacity:p.cap,targetIn:p.tIn,targetOut:p.tOut,actualIn,actualOut,actualStock,lat:coords[store][0],lng:coords[store][1]});
             });
         }
+        saveToStorage(); updateDataTable();
+        alert('已加载14天×8家门店示例数据（含经纬度坐标）');
+    }
 
-        function downloadTemplate() {
-            const template = [
-                { '门店': '朝阳门店', '日期': '2026-08-16', '期初库存': 50, '库位数': 100, '收车目标': 10, '售车目标': 8, '实际收车': 12, '实际售车': 7, '实际库存': 55 },
-                { '门店': '海淀门店', '日期': '2026-08-16', '期初库存': 80, '库位数': 100, '收车目标': 5, '售车目标': 10, '实际收车': 3, '实际售车': 8, '实际库存': 74 }
-            ];
-            const ws = XLSX.utils.json_to_sheet(template);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, '库存数据');
-            XLSX.writeFile(wb, '门店库存数据模板.xlsx');
-        }
-
-        function loadSampleData() {
-            inventoryData = [
-                { store: '朝阳门店', date: '2026-08-10', opening: 45, capacity: 100, targetIn: 8, targetOut: 6, actualIn: 10, actualOut: 5, actualStock: 50 },
-                { store: '朝阳门店', date: '2026-08-11', opening: 50, capacity: 100, targetIn: 8, targetOut: 7, actualIn: 7, actualOut: 8, actualStock: 49 },
-                { store: '朝阳门店', date: '2026-08-12', opening: 49, capacity: 100, targetIn: 10, targetOut: 8, actualIn: 12, actualOut: 6, actualStock: 55 },
-                { store: '朝阳门店', date: '2026-08-13', opening: 55, capacity: 100, targetIn: 5, targetOut: 10, actualIn: 4, actualOut: 9, actualStock: 50 },
-                { store: '朝阳门店', date: '2026-08-14', opening: 50, capacity: 100, targetIn: 8, targetOut: 8, actualIn: 9, actualOut: 7, actualStock: 52 },
-                { store: '朝阳门店', date: '2026-08-15', opening: 52, capacity: 100, targetIn: 8, targetOut: 8, actualIn: 11, actualOut: 8, actualStock: 56 },
-                { store: '海淀门店', date: '2026-08-10', opening: 85, capacity: 100, targetIn: 3, targetOut: 10, actualIn: 2, actualOut: 8, actualStock: 78 },
-                { store: '海淀门店', date: '2026-08-11', opening: 78, capacity: 100, targetIn: 5, targetOut: 10, actualIn: 4, actualOut: 7, actualStock: 76 },
-                { store: '海淀门店', date: '2026-08-12', opening: 76, capacity: 100, targetIn: 5, targetOut: 12, actualIn: 6, actualOut: 10, actualStock: 72 },
-                { store: '海淀门店', date: '2026-08-13', opening: 72, capacity: 100, targetIn: 5, targetOut: 10, actualIn: 3, actualOut: 5, actualStock: 71 },
-                { store: '海淀门店', date: '2026-08-14', opening: 71, capacity: 100, targetIn: 3, targetOut: 10, actualIn: 8, actualOut: 9, actualStock: 68 },
-                { store: '海淀门店', date: '2026-08-15', opening: 68, capacity: 100, targetIn: 5, targetOut: 10, actualIn: 4, actualOut: 11, actualStock: 60 },
-                { store: '西城门店', date: '2026-08-15', opening: 25, capacity: 80, targetIn: 10, targetOut: 5, actualIn: 6, actualOut: 4, actualStock: 28 },
-                { store: '东城门店', date: '2026-08-15', opening: 95, capacity: 100, targetIn: 0, targetOut: 15, actualIn: 12, actualOut: 8, actualStock: 98 },
-                { store: '丰台门店', date: '2026-08-15', opening: 65, capacity: 90, targetIn: 8, targetOut: 8, actualIn: 9, actualOut: 9, actualStock: 65 }
-            ];
-            updateDataTable();
-            alert('已加载示例数据！可以切换到其他标签页查看分析结果。');
-        }
-
-        function exportData() {
-            if (inventoryData.length === 0) { alert('暂无数据可导出'); return; }
-            const exportData = inventoryData.map(row => ({
-                '门店': row.store,
-                '日期': row.date,
-                '期初库存': row.opening,
-                '库位数': row.capacity,
-                '收车目标': row.targetIn,
-                '售车目标': row.targetOut,
-                '实际收车': row.actualIn,
-                '实际售车': row.actualOut,
-                '实际库存': row.actualStock,
-                '理论期末库存': calculateTheoreticalStock(row),
-                '库存差异': row.actualStock - calculateTheoreticalStock(row)
-            }));
-            const ws = XLSX.utils.json_to_sheet(exportData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, '库存分析数据');
-            XLSX.writeFile(wb, `库存分析_${new Date().toISOString().split('T')[0]}.xlsx`);
-        }
+    function downloadTemplate() {
+        const tpl = [{'门店':'朝阳门店','城市':'北京','日期':'2026-08-01','期初库存':50,'库位数':100,'收车目标':8,'售车目标':8,'实际收车':10,'实际售车':7,'实际库存':53,'纬度':39.92,'经度':116.44}];
+        XLSX.writeFile(XLSX.utils.book_append_sheet(XLSX.utils.book_new(),XLSX.utils.json_to_sheet(tpl),'库存数据'),'库存数据模板.xlsx');
+    }
+    function exportAllData() {
+        if(!inventoryData.length) { alert('无数据'); return; }
+        XLSX.writeFile(XLSX.utils.book_append_sheet(XLSX.utils.book_new(),XLSX.utils.json_to_sheet(inventoryData),'数据'),`库存数据_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+    function exportWorkorders() {
+        if(!workorders.length) { alert('无工单'); return; }
+        XLSX.writeFile(XLSX.utils.book_append_sheet(XLSX.utils.book_new(),XLSX.utils.json_to_sheet(workorders.map(w=>({ID:w.id,类型:w.type,标题:w.title,描述:w.desc,门店:w.store,状态:w.status,创建时间:w.createdAt,反馈:w.feedback||'',备注:w.result||''}))),'工单'),`工单导出_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
     </script>
 </body>
 </html>
