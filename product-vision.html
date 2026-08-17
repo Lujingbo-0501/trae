@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>门店库存智能运营平台 - 产品构想</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+        body { font-family: 'Noto Sans SC', sans-serif; background: #0f172a; }
+        .slide { width: 1280px; height: 720px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); position: relative; overflow: hidden; page-break-after: always; }
+        .slide-number { position: absolute; bottom: 24px; right: 32px; font-size: 14px; color: #94a3b8; }
+        .gradient-text { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+        .flow-arrow { position: relative; }
+        .flow-arrow::after { content: '→'; position: absolute; right: -20px; top: 50%; transform: translateY(-50%); font-size: 24px; color: #94a3b8; font-weight: bold; }
+        .flow-arrow:last-child::after { display: none; }
+        @media print { body { background: white; } .slide { margin: 0; box-shadow: none; border-radius: 0; page-break-after: always; } }
+    </style>
+</head>
+<body class="p-8">
+
+    <!-- Slide 1: 产品愿景与核心问题 -->
+    <div class="slide bg-gradient-to-br from-slate-50 via-white to-blue-50">
+        <div class="p-16 h-full flex flex-col">
+            <div class="mb-6">
+                <div class="text-sm font-medium text-blue-600 tracking-wider mb-2">PRODUCT VISION</div>
+                <h1 class="text-5xl font-black text-slate-800 leading-tight">
+                    门店库存<span class="gradient-text">智能运营平台</span>
+                </h1>
+                <p class="text-xl text-slate-500 mt-3">从数据看板到对话式决策 · AI驱动的库存运营闭环</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-8 mt-4 flex-1">
+                <div class="space-y-4">
+                    <div class="bg-red-50 border-l-4 border-red-400 rounded-r-lg p-5">
+                        <div class="font-bold text-red-800 text-lg mb-2">❌ 传统方式痛点</div>
+                        <ul class="text-sm text-red-700 space-y-2">
+                            <li>• 人找数据：在多个报表/系统中切换查找</li>
+                            <li>• 决策凭经验：库位租赁、调拨计划靠人工判断</li>
+                            <li>• 调拨浪费：A城调B城，成交又回A城，徒增物流成本</li>
+                            <li>• 一刀切策略：高效周转店和滞销店用同一套标准</li>
+                            <li>• 无反馈闭环：策略好不好，下次还是拍脑袋</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="bg-green-50 border-l-4 border-green-400 rounded-r-lg p-5">
+                        <div class="font-bold text-green-800 text-lg mb-2">✅ 我们的解法</div>
+                        <ul class="text-sm text-green-700 space-y-2">
+                            <li>• <b>对话式交互</b>：用自然语言提问，AI主动调取数据</li>
+                            <li>• <b>门店画像</b>：自动识别门店类型，差异化策略</li>
+                            <li>• <b>智能调拨</b>：距离+成本+成交区域匹配，减少浪费</li>
+                            <li>• <b>库位预测</b>：多因素加权，支持战略转型场景</li>
+                            <li>• <b>工单闭环</b>：策略→执行→反馈→模型自优化</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-6 mt-6">
+                <div class="flex-1 bg-white rounded-xl p-5 shadow-sm card-hover">
+                    <div class="text-3xl mb-2">🏪</div>
+                    <div class="text-3xl font-black text-slate-800">6类</div>
+                    <div class="text-sm text-slate-500">门店画像自动分类</div>
+                </div>
+                <div class="flex-1 bg-white rounded-xl p-5 shadow-sm card-hover">
+                    <div class="text-3xl mb-2">🔄</div>
+                    <div class="text-3xl font-black text-slate-800">0浪费</div>
+                    <div class="text-sm text-slate-500">同城优先调拨策略</div>
+                </div>
+                <div class="flex-1 bg-white rounded-xl p-5 shadow-sm card-hover">
+                    <div class="text-3xl mb-2">🤖</div>
+                    <div class="text-3xl font-black text-slate-800">对话式</div>
+                    <div class="text-sm text-slate-500">自然语言驱动决策</div>
+                </div>
+                <div class="flex-1 bg-white rounded-xl p-5 shadow-sm card-hover">
+                    <div class="text-3xl mb-2">📋</div>
+                    <div class="text-3xl font-black text-slate-800">闭环</div>
+                    <div class="text-sm text-slate-500">工单反馈持续学习</div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">01 / 02</div>
+    </div>
+
+    <!-- Slide 2: 核心架构与能力闭环 -->
+    <div class="slide bg-white">
+        <div class="p-14 h-full flex flex-col">
+            <div class="mb-6">
+                <div class="text-sm font-medium text-purple-600 tracking-wider mb-2">CORE ARCHITECTURE</div>
+                <h2 class="text-4xl font-black text-slate-800">
+                    AI驱动的<span class="gradient-text">运营决策闭环</span>
+                </h2>
+            </div>
+
+            <div class="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 rounded-2xl p-6 mb-6">
+                <div class="text-center font-semibold text-slate-700 mb-4">🎯 核心交互流程</div>
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flow-arrow bg-white rounded-xl px-4 py-4 shadow-sm text-center flex-1">
+                        <div class="text-2xl mb-1">💬</div>
+                        <div class="font-bold text-sm">对话提问</div>
+                        <div class="text-xs text-slate-500">自然语言表达需求</div>
+                    </div>
+                    <div class="flow-arrow bg-white rounded-xl px-4 py-4 shadow-sm text-center flex-1">
+                        <div class="text-2xl mb-1">📊</div>
+                        <div class="font-bold text-sm">数据调取</div>
+                        <div class="text-xs text-slate-500">历史水位/画像/调拨</div>
+                    </div>
+                    <div class="flow-arrow bg-white rounded-xl px-4 py-4 shadow-sm text-center flex-1">
+                        <div class="text-2xl mb-1">🧠</div>
+                        <div class="font-bold text-sm">AI生成策略</div>
+                        <div class="text-xs text-slate-500">门店差异化建议</div>
+                    </div>
+                    <div class="flow-arrow bg-white rounded-xl px-4 py-4 shadow-sm text-center flex-1">
+                        <div class="text-2xl mb-1">📋</div>
+                        <div class="font-bold text-sm">创建工单</div>
+                        <div class="text-xs text-slate-500">调拨/预警/库位调整</div>
+                    </div>
+                    <div class="flow-arrow bg-white rounded-xl px-4 py-4 shadow-sm text-center flex-1">
+                        <div class="text-2xl mb-1">🔗</div>
+                        <div class="font-bold text-sm">系统对接</div>
+                        <div class="text-xs text-slate-500">IM通知/业务系统</div>
+                    </div>
+                    <div class="bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl px-4 py-4 shadow-lg text-center flex-1 text-white">
+                        <div class="text-2xl mb-1">📈</div>
+                        <div class="font-bold text-sm">反馈学习</div>
+                        <div class="text-xs opacity-90">模型准确率持续提升</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-5 flex-1">
+                <div class="bg-slate-50 rounded-xl p-5 card-hover">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-xl">🏪</div>
+                        <div class="font-bold text-slate-800">门店画像引擎</div>
+                    </div>
+                    <div class="text-xs text-slate-600 space-y-1.5">
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span>高效周转型：高水位=健康，不盲目缩库</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-yellow-500"></span>收强售弱型：重点提销售，而非加库位</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-500"></span>售强收弱型：补充车源，支撑销售</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span>周转瓶颈型：促销去化+控收车</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-purple-500"></span>战略转型：人工标记扩/缩库</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 rounded-xl p-5 card-hover">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center text-xl">🔄</div>
+                        <div class="font-bold text-slate-800">智能调拨算法</div>
+                    </div>
+                    <div class="text-xs text-slate-600 space-y-1.5">
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span>供需匹配：高水位调出→低水位调入</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span>同城优先：避免跨城无效调拨</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-yellow-500"></span>距离/成本计算：Haversine地理距离</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-yellow-500"></span>风险提示：跨城/高成本自动预警</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-500"></span>参数可调：距离/数量/成本人工配置</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 rounded-xl p-5 card-hover">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-xl">📋</div>
+                        <div class="font-bold text-slate-800">工单与对接</div>
+                    </div>
+                    <div class="text-xs text-slate-600 space-y-1.5">
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span>🚨 预警通知：企微/钉钉→门店负责人</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-500"></span>📐 库位规划：对接租赁管理系统</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span>🔄 调拨任务：对接车辆调拨系统</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-purple-500"></span>💡 运营策略：内部运营平台流转</div>
+                        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-500"></span>🔁 效果反馈：持续优化模型准确率</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl p-4 text-white text-center">
+                <span class="font-medium">💡 核心价值</span>
+                <span class="mx-3">|</span>
+                <span>降低调拨物流成本</span>
+                <span class="mx-3">·</span>
+                <span>提升库位利用率</span>
+                <span class="mx-3">·</span>
+                <span>加速库存周转</span>
+                <span class="mx-3">·</span>
+                <span>沉淀运营经验形成数据资产</span>
+            </div>
+        </div>
+        <div class="slide-number">02 / 02</div>
+    </div>
+
+</body>
+</html>
