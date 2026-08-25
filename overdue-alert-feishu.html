@@ -712,7 +712,10 @@ function renderPreview(name,g){
             </div>
             ${stageBars?`<div style="margin-bottom:12px"><div style="font-size:13px;color:#646a73;margin-bottom:6px">环节分布</div>${stageBars}</div>`:''}
             <div style="background:#f7f9fc;border-left:3px solid #3370ff;padding:8px 12px;border-radius:4px;font-size:12px;color:#646a73;margin-bottom:10px;line-height:1.5">💡 <b>处理要求</b>：P0严重超期车辆请优先处理，今日18:00前在系统中反馈处理进度。如遇无法解决的问题，请及时升级。</div>
-            <div><button class="feishu-btn">📋 查看超期明细</button><button class="feishu-btn secondary">✅ 我已知悉</button></div>
+            <div>
+                <button class="feishu-btn" onclick="scrollToDetail()">📋 查看超期明细</button>
+                <button class="feishu-btn secondary" onclick="markPreviewAck()">✅ 我已知悉</button>
+            </div>
         </div></div>`;
     window._cardJson=JSON.stringify(buildCardPayload(name,g),null,2);
 }
@@ -734,25 +737,53 @@ function renderDetailTable(){
 
 function markHandled(vin){alert('已标记 '+vin+' 为处理中\n真实场景下会回写Hive/业务系统，关闭预警，并记录处理人/时间。');}
 
-function getWebhook(){
-    try{return localStorage.getItem('feishu_webhook')||'';}catch(e){return '';}
-}
-function setWebhook(url){
-    try{localStorage.setItem('feishu_webhook',url);}catch(e){}
-    updateWebhookStatus();
-}
+function getWebhook(){try{return localStorage.getItem('feishu_webhook')||'';}catch(e){return '';}}
+function getDetailUrl(){try{return localStorage.getItem('detail_url')||'';}catch(e){return '';}}
+function setWebhook(url){try{localStorage.setItem('feishu_webhook',url);}catch(e){}updateWebhookStatus();}
+function setDetailUrl(url){try{localStorage.setItem('detail_url',url);}catch(e){}}
 function updateWebhookStatus(){
     const wh=getWebhook();
     const btn=document.getElementById('webhookStatusBtn');
     if(!btn)return;
     if(wh){btn.textContent='✅ Webhook已配置';btn.className='text-green-600 hover:underline';}
-    else{btn.textContent='⚙️ 点击配置Webhook';btn.className='text-blue-500 hover:underline';}
+    else{btn.textContent='⚙️ 点击配置飞书推送';btn.className='text-blue-500 hover:underline';}
 }
 function quickSetWebhook(){
     const wh=getWebhook();
-    const url=prompt('请输入飞书自定义机器人Webhook地址：\n\n（在飞书群→群设置→群机器人→添加自定义机器人→复制Webhook）\n\n示例：https://open.feishu.cn/open-apis/bot/v2/hook/xxx',wh||'https://open.feishu.cn/open-apis/bot/v2/hook/');
-    if(url===null)return;
-    if(url.trim()){setWebhook(url.trim());alert('✅ Webhook已保存！\n\n现在可以点击「发送到飞书」按钮真实推送了。');}
+    const du=getDetailUrl();
+    const html=`<div style="text-align:left">
+        <div style="margin-bottom:12px"><b>飞书机器人 Webhook</b><br>
+        <span style="color:#888;font-size:12px">在飞书群→群设置→群机器人→添加"自定义机器人"后复制</span><br>
+        <input id="cfg_wh" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${wh}" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx"></div>
+        <div style="margin-bottom:12px"><b>明细页面 URL（可选）</b><br>
+        <span style="color:#888;font-size:12px">卡片中"查看明细"按钮跳转的业务系统地址，{store}会替换为门店名</span><br>
+        <input id="cfg_du" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${du}" placeholder="https://your-system.com/overdue?store={store}"></div>
+    </div>`;
+    const div=document.createElement('div');
+    div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+    div.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;width:460px;max-width:90vw">
+        <h3 style="margin:0 0 12px 0;font-size:16px">⚙️ 飞书推送配置</h3>${html}
+        <div style="text-align:right;margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+            <button id="cfg_cancel" style="padding:6px 16px;border:1px solid #ddd;border-radius:6px;cursor:pointer;background:#fff">取消</button>
+            <button id="cfg_save" style="padding:6px 16px;border:none;border-radius:6px;cursor:pointer;background:#3370ff;color:#fff">保存</button>
+        </div>
+    </div>`;
+    document.body.appendChild(div);
+    div.querySelector('#cfg_cancel').onclick=()=>document.body.removeChild(div);
+    div.querySelector('#cfg_save').onclick=()=>{
+        const v1=div.querySelector('#cfg_wh').value.trim();
+        const v2=div.querySelector('#cfg_du').value.trim();
+        setWebhook(v1);setDetailUrl(v2);
+        document.body.removeChild(div);
+        if(v1)alert('✅ 配置已保存！现在可以真实发送飞书卡片了。');
+    };
+}
+function scrollToDetail(){
+    const el=document.getElementById('detailTable');
+    if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function markPreviewAck(){
+    alert('✅ 预览模式：此按钮在真实飞书卡片中会回传"已知悉"事件，可对接系统记录确认状态。');
 }
 
 function buildCardPayload(name,g){
@@ -788,13 +819,22 @@ function buildCardPayload(name,g){
                 ...(stageText?[{tag:'div',text:{tag:'lark_md',content:'```text\n'+stageText+'```'}}]:[]),
                 {tag:'hr'},
                 {tag:'div',text:{tag:'lark_md',content:'> 💡 **处理要求**：P0严重超期车辆请优先处理，今日18:00前在系统中反馈处理进度。如遇无法解决的问题，请及时升级。'}},
-                {tag:'action',actions:[
-                    {tag:'button',text:{tag:'plain_text',content:'📋 查看超期明细'},type:'primary',url:'https://example.com/overdue?store='+encodeURIComponent(name)},
-                    {tag:'button',text:{tag:'plain_text',content:'✅ 我已知悉'},type:'default',value:{store:name,action:'ack'}}
-                ]}
+                {tag:'action',actions:buildCardActions(name)}
             ]
         }
     };
+}
+function buildCardActions(storeName){
+    const actions=[];
+    const detailUrl=getDetailUrl();
+    if(detailUrl){
+        const url=detailUrl.replace(/\{store\}/g,encodeURIComponent(storeName));
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看超期明细'},type:'primary',url:url});
+    }else{
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看超期明细（请配置URL）'},type:'primary'});
+    }
+    actions.push({tag:'button',text:{tag:'plain_text',content:'✅ 我已知悉'},type:'default',value:{store:storeName,action:'ack'}});
+    return actions;
 }
 
 async function sendToFeishu(){
