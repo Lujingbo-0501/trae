@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二手车供应链控制塔 - Supply Chain Control Tower</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        * { font-family: 'Inter', -apple-system, 'Noto Sans SC', sans-serif; }
+        body { background: #0a0e1a; }
+        .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.08); }
+        .glow-green { box-shadow: 0 0 20px rgba(34,197,94,0.2); }
+        .glow-yellow { box-shadow: 0 0 20px rgba(234,179,8,0.2); }
+        .glow-red { box-shadow: 0 0 20px rgba(239,68,68,0.2); }
+        .metric-card { transition: all 0.3s ease; }
+        .metric-card:hover { transform: translateY(-2px); }
+        .funnel-segment { transition: all 0.3s ease; cursor: pointer; }
+        .funnel-segment:hover { filter: brightness(1.2); }
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .flow-line { position: relative; overflow: hidden; }
+        .flow-line::after { content:''; position:absolute; top:50%; left:-100%; width:100%; height:2px; background:linear-gradient(90deg,transparent,#3b82f6,transparent); animation:flow 2s infinite; }
+        @keyframes flow { to { left:100%; } }
+        .eta-timer { font-variant-numeric: tabular-nums; }
+        .node-card { position: relative; }
+        .node-card.delayed::before { content:'⚠️'; position:absolute; top:-8px; right:-8px; font-size:16px; }
+        .ai-fab { position:fixed; bottom:24px; right:24px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#06b6d4,#3b82f6); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 20px rgba(59,130,246,0.4); z-index:1000; transition:transform 0.2s; font-size:24px; }
+        .ai-fab:hover { transform:scale(1.1); }
+        .ai-panel { position:fixed; bottom:90px; right:24px; width:420px; max-width:calc(100vw - 48px); max-height:600px; background:#1e293b; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,0.5); z-index:1001; display:flex; flex-direction:column; overflow:hidden; transform-origin:bottom right; transition:all 0.3s ease; transform:scale(0); opacity:0; pointer-events:none; border:1px solid rgba(255,255,255,0.1); }
+        .ai-panel.open { transform:scale(1); opacity:1; pointer-events:auto; }
+        .tab-active { border-bottom: 2px solid #3b82f6; color: #60a5fa !important; }
+        ::-webkit-scrollbar { width:6px; height:6px; } ::-webkit-scrollbar-track { background:#1e293b; } ::-webkit-scrollbar-thumb { background:#475569; border-radius:3px; }
+    </style>
+</head>
+<body class="text-gray-100 min-h-screen">
+    <div class="max-w-[1600px] mx-auto p-6">
+        <header class="mb-6 flex items-center justify-between">
+            <div>
+                <div class="flex items-center gap-3 mb-1">
+                    <span class="text-3xl">🗼</span>
+                    <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">供应链控制塔</h1>
+                    <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full">Supply Chain Control Tower</span>
+                    <span class="flex items-center gap-1 text-xs text-green-400"><span class="w-2 h-2 bg-green-400 rounded-full pulse-dot"></span>实时</span>
+                </div>
+                <p class="text-sm text-gray-400">上架时效 · 交付时效 · ETA预测 · 智能调度</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="text-right">
+                    <div class="text-xs text-gray-400">今日在途车辆</div>
+                    <div class="text-xl font-bold">2,847</div>
+                </div>
+                <select class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm" onchange="switchRegion(this.value)">
+                    <option value="all">全国</option><option value="north">华北区</option><option value="east">华东区</option><option value="south">华南区</option><option value="west">西部区</option>
+                </select>
+            </div>
+        </header>
+
+        <div class="flex gap-2 mb-6 border-b border-slate-700">
+            <button onclick="switchView('tower')" id="tab-tower" class="px-4 py-3 text-sm text-gray-400 hover:text-white tab-active">🗼 控制塔总览</button>
+            <button onclick="switchView('listing')" id="tab-listing" class="px-4 py-3 text-sm text-gray-400 hover:text-white">📤 上架时效分析</button>
+            <button onclick="switchView('delivery')" id="tab-delivery" class="px-4 py-3 text-sm text-gray-400 hover:text-white">🚚 交付时效分析</button>
+            <button onclick="switchView('eta')" id="tab-eta" class="px-4 py-3 text-sm text-gray-400 hover:text-white">⏱️ ETA预测引擎</button>
+            <button onclick="switchView('alerts')" id="tab-alerts" class="px-4 py-3 text-sm text-gray-400 hover:text-white">🚨 异常预警</button>
+        </div>
+
+        <div id="view-tower" class="view-content">
+            <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="glass rounded-xl p-5 metric-card glow-green">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-gray-400">上架时效</span>
+                        <span class="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full">目标≤48h</span>
+                    </div>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-4xl font-bold text-green-400 eta-timer" id="kpi-listing">42.3</span>
+                        <span class="text-gray-400">小时</span>
+                        <span class="text-xs text-green-400 ml-auto">↓5.2h</span>
+                    </div>
+                    <div class="mt-3 h-1 bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full" style="width:88%"></div>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">达成率 88%</div>
+                </div>
+                <div class="glass rounded-xl p-5 metric-card glow-yellow">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-gray-400">交付时效</span>
+                        <span class="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full">目标≤5天</span>
+                    </div>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-4xl font-bold text-yellow-400 eta-timer" id="kpi-delivery">4.7</span>
+                        <span class="text-gray-400">天</span>
+                        <span class="text-xs text-yellow-400 ml-auto">↓0.8天</span>
+                    </div>
+                    <div class="mt-3 h-1 bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-yellow-500 to-orange-400 rounded-full" style="width:76%"></div>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">达成率 76%</div>
+                </div>
+                <div class="glass rounded-xl p-5 metric-card glow-green">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-gray-400">ETA准确率</span>
+                        <span class="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full">≥90%</span>
+                    </div>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-4xl font-bold text-cyan-400 eta-timer">92.4</span>
+                        <span class="text-gray-400">%</span>
+                        <span class="text-xs text-green-400 ml-auto">↑2.1%</span>
+                    </div>
+                    <div class="mt-3 h-1 bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-cyan-500 to-blue-400 rounded-full" style="width:92%"></div>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">±24h内命中率</div>
+                </div>
+                <div class="glass rounded-xl p-5 metric-card glow-red">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-gray-400">异常工单</span>
+                        <span class="text-xs px-2 py-0.5 bg-red-500/20 text-red-400 rounded-full pulse-dot">待处理</span>
+                    </div>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-4xl font-bold text-red-400">37</span>
+                        <span class="text-gray-400">单</span>
+                        <span class="text-xs text-red-400 ml-auto">↑12</span>
+                    </div>
+                    <div class="mt-3 flex gap-1">
+                        <span class="text-xs px-2 py-0.5 bg-red-500/20 text-red-400 rounded">滞留15</span>
+                        <span class="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded">超时14</span>
+                        <span class="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">预警8</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass rounded-xl p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4">🔄 供应链全链路实时视图</h3>
+                <div class="flex items-stretch gap-1" id="supplyChainFlow">
+                    <div class="node-card flex-1 bg-gradient-to-b from-blue-500/20 to-blue-600/10 rounded-lg p-3 text-center border border-blue-500/30 cursor-pointer hover:from-blue-500/30" onclick="drillDown('留资收车')">
+                        <div class="text-2xl mb-1">📱</div>
+                        <div class="text-xs font-medium">留资/收车</div>
+                        <div class="text-lg font-bold text-blue-400 mt-1">2.1h</div>
+                        <div class="text-xs text-gray-400">在库:486</div>
+                    </div>
+                    <div class="flex items-center justify-center flow-line w-4"><div class="w-full h-0.5 bg-slate-600"></div></div>
+                    <div class="node-card flex-1 bg-gradient-to-b from-purple-500/20 to-purple-600/10 rounded-lg p-3 text-center border border-purple-500/30 cursor-pointer hover:from-purple-500/30" onclick="drillDown('检测评估')">
+                        <div class="text-2xl mb-1">🔍</div>
+                        <div class="text-xs font-medium">检测评估</div>
+                        <div class="text-lg font-bold text-purple-400 mt-1">8.4h</div>
+                        <div class="text-xs text-gray-400">在库:298</div>
+                    </div>
+                    <div class="flex items-center justify-center flow-line w-4"><div class="w-full h-0.5 bg-slate-600"></div></div>
+                    <div class="node-card flex-1 bg-gradient-to-b from-orange-500/20 to-orange-600/10 rounded-lg p-3 text-center border border-orange-500/30 cursor-pointer hover:from-orange-500/30 delayed" onclick="drillDown('整备翻新')">
+                        <div class="text-2xl mb-1">🔧</div>
+                        <div class="text-xs font-medium">整备翻新</div>
+                        <div class="text-lg font-bold text-orange-400 mt-1">18.7h</div>
+                        <div class="text-xs text-red-400">⚠️瓶颈</div>
+                    </div>
+                    <div class="flex items-center justify-center flow-line w-4"><div class="w-full h-0.5 bg-slate-600"></div></div>
+                    <div class="node-card flex-1 bg-gradient-to-b from-yellow-500/20 to-yellow-600/10 rounded-lg p-3 text-center border border-yellow-500/30 cursor-pointer hover:from-yellow-500/30" onclick="drillDown('定价上架')">
+                        <div class="text-2xl mb-1">🏷️</div>
+                        <div class="text-xs font-medium">定价上架</div>
+                        <div class="text-lg font-bold text-yellow-400 mt-1">5.2h</div>
+                        <div class="text-xs text-gray-400">在库:412</div>
+                    </div>
+                    <div class="flex items-center justify-center flow-line w-4"><div class="w-full h-0.5 bg-slate-600"></div></div>
+                    <div class="node-card flex-1 bg-gradient-to-b from-green-500/20 to-green-600/10 rounded-lg p-3 text-center border border-green-500/30 cursor-pointer hover:from-green-500/30" onclick="drillDown('线上销售')">
+                        <div class="text-2xl mb-1">🛒</div>
+                        <div class="text-xs font-medium">线上销售</div>
+                        <div class="text-lg font-bold text-green-400 mt-1">12.3天</div>
+                        <div class="text-xs text-gray-400">在售:1,893</div>
+                    </div>
+                    <div class="flex items-center justify-center flow-line w-4"><div class="w-full h-0.5 bg-slate-600"></div></div>
+                    <div class="node-card flex-1 bg-gradient-to-b from-cyan-500/20 to-cyan-600/10 rounded-lg p-3 text-center border border-cyan-500/30 cursor-pointer hover:from-cyan-500/30" onclick="drillDown('成交过户')">
+                        <div class="text-2xl mb-1">📝</div>
+                        <div class="text-xs font-medium">成交过户</div>
+                        <div class="text-lg font-bold text-cyan-400 mt-1">1.8天</div>
+                        <div class="text-xs text-gray-400">办理:156</div>
+                    </div>
+                    <div class="flex items-center justify-center flow-line w-4"><div class="w-full h-0.5 bg-slate-600"></div></div>
+                    <div class="node-card flex-1 bg-gradient-to-b from-indigo-500/20 to-indigo-600/10 rounded-lg p-3 text-center border border-indigo-500/30 cursor-pointer hover:from-indigo-500/30" onclick="drillDown('物流运输')">
+                        <div class="text-2xl mb-1">🚛</div>
+                        <div class="text-xs font-medium">物流运输</div>
+                        <div class="text-lg font-bold text-indigo-400 mt-1">2.4天</div>
+                        <div class="text-xs text-gray-400">在途:302</div>
+                    </div>
+                    <div class="flex items-center justify-center flow-line w-4"><div class="w-full h-0.5 bg-slate-600"></div></div>
+                    <div class="node-card flex-1 bg-gradient-to-b from-emerald-500/20 to-emerald-600/10 rounded-lg p-3 text-center border border-emerald-500/30 cursor-pointer hover:from-emerald-500/30" onclick="drillDown('交付提车')">
+                        <div class="text-2xl mb-1">🎉</div>
+                        <div class="text-xs font-medium">交付提车</div>
+                        <div class="text-lg font-bold text-emerald-400 mt-1">0.5天</div>
+                        <div class="text-xs text-gray-400">今日:47</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-6">
+                <div class="glass rounded-xl p-5 col-span-2">
+                    <h3 class="text-lg font-semibold mb-4">⏱️ 上架时效瀑布图（收车→上架）</h3>
+                    <div class="h-64"><canvas id="listingChart"></canvas></div>
+                </div>
+                <div class="glass rounded-xl p-5">
+                    <h3 class="text-lg font-semibold mb-4">🎯 瓶颈识别</h3>
+                    <div class="space-y-3">
+                        <div class="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                            <div class="flex items-center gap-2 mb-1"><span class="text-red-400">🔴</span><span class="font-medium text-red-400">整备翻新 P1</span></div>
+                            <div class="text-xs text-gray-400">平均18.7h，超目标7h。原因：钣喷工位不足，部分配件等待时间长。</div>
+                            <button class="mt-2 text-xs px-3 py-1 bg-red-500 text-white rounded-full" onclick="createAction('整备产能扩充')">生成优化方案</button>
+                        </div>
+                        <div class="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                            <div class="flex items-center gap-2 mb-1"><span class="text-yellow-400">🟡</span><span class="font-medium text-yellow-400">检测排期 P2</span></div>
+                            <div class="text-xs text-gray-400">平均8.4h，峰值可达16h。周末检测师排班不足。</div>
+                            <button class="mt-2 text-xs px-3 py-1 bg-yellow-500 text-black rounded-full" onclick="createAction('检测排班优化')">生成优化方案</button>
+                        </div>
+                        <div class="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                            <div class="flex items-center gap-2 mb-1"><span class="text-orange-400">🟠</span><span class="font-medium text-orange-400">跨城物流 P2</span></div>
+                            <div class="text-xs text-gray-400">跨城调拨平均3.2天，干线运输空载率高。</div>
+                            <button class="mt-2 text-xs px-3 py-1 bg-orange-500 text-white rounded-full" onclick="createAction('物流路径优化')">生成优化方案</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-listing" class="view-content hidden">
+            <div class="grid grid-cols-5 gap-4 mb-6">
+                <div class="glass rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">留资→收车</div><div class="text-2xl font-bold text-blue-400">2.1h</div><div class="text-xs text-green-400">达标 ✓</div></div>
+                <div class="glass rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">收车→检测</div><div class="text-2xl font-bold text-purple-400">3.8h</div><div class="text-xs text-green-400">达标 ✓</div></div>
+                <div class="glass rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">检测→整备</div><div class="text-2xl font-bold text-yellow-400">4.6h</div><div class="text-xs text-yellow-400">排队中</div></div>
+                <div class="glass rounded-xl p-4 border-2 border-red-500/50"><div class="text-xs text-gray-400 mb-1">整备→完工</div><div class="text-2xl font-bold text-red-400">18.7h</div><div class="text-xs text-red-400">⚠️ 超时+7h</div></div>
+                <div class="glass rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">完工→上架</div><div class="text-2xl font-bold text-cyan-400">5.2h</div><div class="text-xs text-green-400">达标 ✓</div></div>
+            </div>
+            <div class="grid grid-cols-2 gap-6">
+                <div class="glass rounded-xl p-5"><h3 class="text-lg font-semibold mb-4">按车辆级别上架时效</h3><div class="h-72"><canvas id="listingByClassChart"></canvas></div></div>
+                <div class="glass rounded-xl p-5"><h3 class="text-lg font-semibold mb-4">上架时效趋势（近30天）</h3><div class="h-72"><canvas id="listingTrendChart"></canvas></div></div>
+            </div>
+            <div class="glass rounded-xl p-5 mt-6"><h3 class="text-lg font-semibold mb-4">整备环节明细分析</h3><div class="grid grid-cols-6 gap-3 text-center text-sm">
+                <div class="p-3 bg-slate-700/50 rounded-lg"><div class="text-gray-400 text-xs">外观清洗</div><div class="text-lg font-bold">1.2h</div></div>
+                <div class="p-3 bg-slate-700/50 rounded-lg"><div class="text-gray-400 text-xs">内饰清洁</div><div class="text-lg font-bold">1.8h</div></div>
+                <div class="p-3 bg-yellow-500/20 rounded-lg border border-yellow-500/30"><div class="text-yellow-400 text-xs">小钣金</div><div class="text-lg font-bold text-yellow-400">3.5h</div><div class="text-xs text-yellow-400">排队1.2h</div></div>
+                <div class="p-3 bg-red-500/20 rounded-lg border border-red-500/30"><div class="text-red-400 text-xs">喷漆</div><div class="text-lg font-bold text-red-400">7.2h</div><div class="text-xs text-red-400">⚠️工位等待3h</div></div>
+                <div class="p-3 bg-slate-700/50 rounded-lg"><div class="text-gray-400 text-xs">机械检修</div><div class="text-lg font-bold">2.8h</div></div>
+                <div class="p-3 bg-yellow-500/20 rounded-lg border border-yellow-500/30"><div class="text-yellow-400 text-xs">配件等待</div><div class="text-lg font-bold text-yellow-400">2.2h</div><div class="text-xs text-yellow-400">外采配件</div></div>
+            </div></div>
+        </div>
+
+        <div id="view-delivery" class="view-content hidden">
+            <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="glass rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">成交→签约</div><div class="text-2xl font-bold">0.8天</div><div class="text-xs text-green-400">达标 ✓</div></div>
+                <div class="glass rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">签约→过户</div><div class="text-2xl font-bold text-cyan-400">1.0天</div><div class="text-xs text-green-400">达标 ✓</div></div>
+                <div class="glass rounded-xl p-4 border-2 border-orange-500/50"><div class="text-xs text-gray-400 mb-1">过户→发运</div><div class="text-2xl font-bold text-orange-400">0.5天</div><div class="text-xs text-orange-400">提车等待</div></div>
+                <div class="glass rounded-xl p-4 border-2 border-red-500/50"><div class="text-xs text-gray-400 mb-1">运输→到店</div><div class="text-2xl font-bold text-red-400">2.4天</div><div class="text-xs text-red-400">⚠️跨城波动大</div></div>
+            </div>
+            <div class="grid grid-cols-2 gap-6">
+                <div class="glass rounded-xl p-5"><h3 class="text-lg font-semibold mb-4">交付时效分布（同城vs跨城）</h3><div class="h-72"><canvas id="deliveryDistChart"></canvas></div></div>
+                <div class="glass rounded-xl p-5"><h3 class="text-lg font-semibold mb-4">各区域交付时效热力</h3><div class="h-72"><canvas id="deliveryRegionChart"></canvas></div></div>
+            </div>
+        </div>
+
+        <div id="view-eta" class="view-content hidden">
+            <div class="glass rounded-xl p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-2">⏱️ ETA预测引擎 - 给用户的"预计X天提车"</h3>
+                <p class="text-sm text-gray-400 mb-4">基于车辆级别、车况、区域距离、整备复杂度、历史数据，实时计算预计交付时间，APP端展示给客户。</p>
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="bg-slate-800/50 rounded-lg p-4">
+                        <div class="text-sm text-gray-400 mb-2">输入参数</div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between"><span>车辆级别</span><select id="etaClass" class="bg-slate-700 rounded px-2 py-1 text-xs w-24" onchange="calcETA()"><option value="economy">经济型</option><option value="mid" selected>中端</option><option value="premium">高端</option><option value="luxury">豪华</option></select></div>
+                            <div class="flex justify-between"><span>车况等级</span><select id="etaCondition" class="bg-slate-700 rounded px-2 py-1 text-xs w-24" onchange="calcETA()"><option value="A" selected>A级（准新）</option><option value="B">B级（小瑕疵）</option><option value="C">C级（需整备）</option><option value="D">D级（重度整备）</option></select></div>
+                            <div class="flex justify-between"><span>交付城市</span><select id="etaDistance" class="bg-slate-700 rounded px-2 py-1 text-xs w-24" onchange="calcETA()"><option value="local" selected>同城</option><option value="near">邻省</option><option value="far">跨省</option><option value="remote">偏远</option></select></div>
+                            <div class="flex justify-between"><span>是否贷款</span><select id="etaLoan" class="bg-slate-700 rounded px-2 py-1 text-xs w-24" onchange="calcETA()"><option value="cash">全款</option><option value="loan" selected>贷款</option></select></div>
+                        </div>
+                    </div>
+                    <div class="bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-lg p-4 flex flex-col items-center justify-center border border-cyan-500/30">
+                        <div class="text-sm text-gray-300 mb-2">预计交付时间</div>
+                        <div class="text-5xl font-black eta-timer text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400" id="etaResult">5天</div>
+                        <div class="text-xs text-gray-400 mt-2">置信度: <span class="text-green-400">93%</span></div>
+                        <div class="text-xs text-cyan-400 mt-1">±1天误差范围内</div>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-lg p-4">
+                        <div class="text-sm text-gray-400 mb-2">ETA拆解（天）</div>
+                        <div id="etaBreakdown" class="space-y-1.5 text-sm"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass rounded-xl p-5"><h3 class="text-lg font-semibold mb-4">ETA准确率监控</h3><div class="h-64"><canvas id="etaAccuracyChart"></canvas></div></div>
+        </div>
+
+        <div id="view-alerts" class="view-content hidden">
+            <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="glass rounded-xl p-4 border border-red-500/50"><div class="text-xs text-gray-400 mb-1">🔴 严重超时</div><div class="text-3xl font-bold text-red-400">15</div><div class="text-xs text-red-400">超目标2倍以上</div></div>
+                <div class="glass rounded-xl p-4 border border-orange-500/50"><div class="text-xs text-gray-400 mb-1">🟠 超时预警</div><div class="text-3xl font-bold text-orange-400">14</div><div class="text-xs text-orange-400">超目标50%</div></div>
+                <div class="glass rounded-xl p-4 border border-yellow-500/50"><div class="text-xs text-gray-400 mb-1">🟡 排队预警</div><div class="text-3xl font-bold text-yellow-400">8</div><div class="text-xs text-yellow-400">即将超时</div></div>
+                <div class="glass rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">✅ 今日已处理</div><div class="text-3xl font-bold text-green-400">23</div></div>
+            </div>
+            <div class="glass rounded-xl p-5"><h3 class="text-lg font-semibold mb-4">异常工单列表</h3><div class="overflow-x-auto"><table class="w-full text-sm">
+                <thead class="text-gray-400 border-b border-slate-700"><tr><th class="text-left py-2">车架号</th><th class="text-left">车型</th><th class="text-left">当前环节</th><th class="text-left">滞留时长</th><th class="text-left">异常原因</th><th class="text-left">责任方</th><th class="text-left">优先级</th><th class="text-center">操作</th></tr></thead>
+                <tbody class="text-gray-300" id="alertTable">
+                    <tr class="border-b border-slate-700/50 hover:bg-slate-700/30"><td class="py-3">LFV2A2***3892</td><td>大众朗逸 2023</td><td>整备-喷漆</td><td class="text-red-400 font-medium">31h (超13h)</td><td>喷漆工位排队，等待前序车辆完工</td><td>整备中心</td><td><span class="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs">P0</span></td><td class="text-center"><button class="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded" onclick="dispatchAlert(this)">派单</button></td></tr>
+                    <tr class="border-b border-slate-700/50 hover:bg-slate-700/30"><td class="py-3">LSVUU6***1024</td><td>宝马3系 2022</td><td>检测</td><td class="text-orange-400 font-medium">12h (超4h)</td><td>检测师周末排班不足，等待周一</td><td>检测组</td><td><span class="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs">P1</span></td><td class="text-center"><button class="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded" onclick="dispatchAlert(this)">派单</button></td></tr>
+                    <tr class="border-b border-slate-700/50 hover:bg-slate-700/30"><td class="py-3">LGBH52***7756</td><td>日产轩逸 2023</td><td>物流</td><td class="text-red-400 font-medium">5.2天 (超2.2天)</td><td>跨城干线运输，车辆在途滞留</td><td>承运商</td><td><span class="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs">P0</span></td><td class="text-center"><button class="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded" onclick="dispatchAlert(this)">派单</button></td></tr>
+                    <tr class="border-b border-slate-700/50 hover:bg-slate-700/30"><td class="py-3">LVHRH1***3341</td><td>本田CR-V 2023</td><td>过户</td><td class="text-orange-400 font-medium">2.1天 (超1.1天)</td><td>车管所排队，材料待补</td><td>过户组</td><td><span class="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs">P1</span></td><td class="text-center"><button class="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded" onclick="dispatchAlert(this)">派单</button></td></tr>
+                    <tr class="border-b border-slate-700/50 hover:bg-slate-700/30"><td class="py-3">LFPH5A***9012</td><td>红旗H5 2023</td><td>定价</td><td class="text-yellow-400 font-medium">8h (临界)</td><td>车况特殊，需要高级定价师复核</td><td>定价组</td><td><span class="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs">P2</span></td><td class="text-center"><button class="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded" onclick="dispatchAlert(this)">派单</button></td></tr>
+                </tbody>
+            </table></div></div>
+        </div>
+    </div>
+
+    <div class="ai-fab" onclick="toggleAI()">🤖</div>
+    <div id="aiPanel" class="ai-panel">
+        <div class="bg-gradient-to-r from-cyan-600 to-blue-600 p-4 flex justify-between items-center">
+            <div><div class="font-semibold">🤖 供应链AI策略助手</div><div class="text-xs opacity-80">数据分析 · 瓶颈诊断 · 策略生成</div></div>
+            <button onclick="toggleAI()" class="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center">×</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 text-sm max-h-96" id="aiMsgs"></div>
+        <div class="p-2 border-t border-slate-700 flex gap-1 flex-wrap" id="aiQuick"></div>
+        <div class="p-3 border-t border-slate-700 flex gap-2">
+            <input type="text" id="aiInput" class="flex-1 bg-slate-700 border border-slate-600 rounded-full px-4 py-2 text-sm outline-none focus:border-cyan-500" placeholder="问我关于供应链时效的问题..." onkeypress="if(event.key==='Enter')sendAI()">
+            <button onclick="sendAI()" class="w-9 h-9 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 flex items-center justify-center">➤</button>
+        </div>
+    </div>
+
+    <script>
+    let aiOpen = false;
+    const etaModel = {
+        economy: { base: {local:3,near:5,far:7,remote:10} },
+        mid: { base: {local:4,near:6,far:8,remote:12} },
+        premium: { base: {local:5,near:7,far:10,remote:14} },
+        luxury: { base: {local:6,near:9,far:12,remote:16} },
+        condition: { A:0, B:0.5, C:1.5, D:3 },
+        loan: { cash:0, loan:1 }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initCharts();
+        calcETA();
+        addAIMsg('ai','你好！我是供应链AI策略助手 🤖 我可以帮你分析瓶颈、预测时效、生成优化策略。试试问我：<br>• <span class="text-cyan-400 cursor-pointer underline" onclick="q(\'当前最大瓶颈是哪个环节\')">当前最大瓶颈</span><br>• <span class="text-cyan-400 cursor-pointer underline" onclick="q(\'整备环节为什么超时\')">整备为什么超时</span><br>• <span class="text-cyan-400 cursor-pointer underline" onclick="q(\'如何把上架时效压到36小时\')">如何把上架压到36h</span><br>• <span class="text-cyan-400 cursor-pointer underline" onclick="q(\'ETA准确率怎么提升\')">ETA准确率怎么提升</span>');
+        showQuick(['📊瓶颈诊断','⚡优化方案','📈趋势分析','🔮预测模拟']);
+    });
+
+    function switchView(v) {
+        document.querySelectorAll('.view-content').forEach(el=>el.classList.add('hidden'));
+        document.querySelectorAll('[id^=tab-]').forEach(el=>el.classList.remove('tab-active'));
+        document.getElementById('view-'+v).classList.remove('hidden');
+        document.getElementById('tab-'+v).classList.add('tab-active');
+    }
+    function switchRegion(r){ /* demo */ }
+    function drillDown(node){ alert('下钻分析: '+node+'\n\n(这里可以展示该环节的详细数据、排队情况、人员负载、历史趋势等)'); }
+    function createAction(type){ addAIMsg('user','生成'+type+'优化方案'); setTimeout(()=>{
+        const plans = {
+            '整备产能扩充':'<b>整备产能扩充方案</b><br><br>🔴 问题：喷漆工位是最大瓶颈，平均等待3h<br><br>📋 建议：<br>1. 新增1个喷漆工位（ROI约3个月）<br>2. 引入快喷工艺，小划伤2h快速修复<br>3. 钣喷预约排班，高峰时段加班/外协<br>4. 常用配件本地仓备货，减少外采等待<br><br>📊 预期效果：整备环节18.7h→12h，上架时效42h→35h',
+            '检测排班优化':'<b>检测排班优化方案</b><br><br>🟡 问题：周末检测师不足导致检测排队<br><br>📋 建议：<br>1. 周末增加机动检测班<br>2. 上门检测+到店检测分流<br>3. AI初检预筛，减少检测师重复劳动<br>4. 检测SOP标准化，单车检测时间压缩15%',
+            '物流路径优化':'<b>物流路径优化方案</b><br><br>🟠 问题：跨城运输空载率高、时效波动大<br><br>📋 建议：<br>1. 区域集货中心，拼车运输降低成本和时效<br>2. 承运商时效SLA考核+奖惩<br>3. 干线+支线二段式配送网络<br>4. 路线算法优化（TSP问题求解）'
+        };
+        addAIMsg('ai', plans[type]||'方案生成中...'); showQuick(['📋生成工单','📊看更多数据','🔄其他环节']);
+    },800); }
+    function dispatchAlert(btn){ btn.textContent='已派单'; btn.className='text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded'; btn.disabled=true; }
+
+    function calcETA() {
+        const cls = document.getElementById('etaClass').value;
+        const cond = document.getElementById('etaCondition').value;
+        const dist = document.getElementById('etaDistance').value;
+        const loan = document.getElementById('etaLoan').value;
+        let base = etaModel[cls].base[dist];
+        let condAdd = etaModel.condition[cond];
+        let loanAdd = etaModel.loan[loan];
+        let total = base + condAdd + loanAdd;
+        document.getElementById('etaResult').textContent = Math.ceil(total) + '天';
+        const prepDays = condAdd + 1.5;
+        const deliveryDays = etaModel[cls].base[dist] - 1 + loanAdd*0.5;
+        document.getElementById('etaBreakdown').innerHTML = `
+            <div class="flex justify-between"><span class="text-gray-400">整备检测</span><span class="text-orange-400">${prepDays.toFixed(1)}天</span></div>
+            <div class="flex justify-between"><span class="text-gray-400">定价上架</span><span class="text-yellow-400">0.5天</span></div>
+            <div class="flex justify-between"><span class="text-gray-400">成交过户</span><span class="text-cyan-400">1.0天</span></div>
+            <div class="flex justify-between"><span class="text-gray-400">物流运输</span><span class="text-indigo-400">${deliveryDays.toFixed(1)}天</span></div>
+            <div class="flex justify-between border-t border-slate-700 pt-1 font-bold"><span>合计</span><span class="text-cyan-400">${Math.ceil(total)}天</span></div>`;
+    }
+
+    function initCharts() {
+        Chart.defaults.color = '#94a3b8'; Chart.defaults.borderColor = 'rgba(148,163,184,0.1)';
+        new Chart(document.getElementById('listingChart'),{type:'bar',data:{labels:['留资收车','调度','检测','报告','排队整备','整备施工','质检','定价','拍摄上架'],datasets:[{label:'耗时(h)',data:[2.1,1.2,4.6,1.5,3.1,12.4,1.2,2.0,3.2],backgroundColor:['#3b82f6','#3b82f6','#a855f7','#a855f7','#eab308','#ef4444','#eab308','#eab308','#06b6d4']}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(148,163,184,0.05)'}},y:{grid:{display:false}}}}});
+        new Chart(document.getElementById('listingByClassChart'),{type:'bar',data:{labels:['经济型','中端','高端','豪华','新能源'],datasets:[{label:'平均上架(h)',data:[36,42,52,68,38],backgroundColor:'#8b5cf6'},{label:'目标(h)',data:[36,48,60,72,48],backgroundColor:'rgba(139,92,246,0.3)'}]},options:{scales:{y:{beginAtZero:true,grid:{color:'rgba(148,163,184,0.05)'}},x:{grid:{display:false}}}}});
+        new Chart(document.getElementById('listingTrendChart'),{type:'line',data:{labels:Array.from({length:30},(_,i)=>`${i+1}日`),datasets:[{label:'上架时效(h)',data:[52,51,49,50,48,47,49,46,45,47,44,46,43,45,42,44,41,43,40,42,39,41,40,42,39,41,40,42,41,42.3],borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.1)',fill:true,tension:0.4},{label:'目标线',data:Array(30).fill(48),borderColor:'#ef4444',borderDash:[5,5],pointRadius:0}]},options:{plugins:{legend:{position:'top'}},scales:{y:{grid:{color:'rgba(148,163,184,0.05)'}},x:{grid:{display:false},ticks:{maxTicksLimit:10}}}}});
+        new Chart(document.getElementById('deliveryDistChart'),{type:'bar',data:{labels:['1-2天','2-3天','3-4天','4-5天','5-7天','7天+'],datasets:[{label:'同城',data:[45,38,12,3,1,1],backgroundColor:'#22c55e'},{label:'跨城',data:[5,12,28,32,18,5],backgroundColor:'#f59e0b'}]},options:{scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(148,163,184,0.05)'}}}}});
+        new Chart(document.getElementById('deliveryRegionChart'),{type:'bar',data:{labels:['华北','华东','华南','华中','西南','西北','东北'],datasets:[{label:'平均交付天数',data:[3.8,4.2,4.5,5.1,5.8,6.2,5.5],backgroundColor:['#22c55e','#22c55e','#eab308','#eab308','#f59e0b','#ef4444','#f59e0b']}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'rgba(148,163,184,0.05)'}},y:{grid:{display:false}}}}});
+        new Chart(document.getElementById('etaAccuracyChart'),{type:'line',data:{labels:['W1','W2','W3','W4','W5','W6','W7','W8'],datasets:[{label:'ETA准确率(%)',data:[82,84,86,85,88,89,91,92.4],borderColor:'#06b6d4',backgroundColor:'rgba(6,182,212,0.1)',fill:true,tension:0.4},{label:'目标线',data:Array(8).fill(90),borderColor:'#ef4444',borderDash:[5,5],pointRadius:0}]},options:{plugins:{legend:{position:'top'}},scales:{y:{min:70,max:100,grid:{color:'rgba(148,163,184,0.05)'}},x:{grid:{display:false}}}}});
+    }
+
+    function toggleAI(){aiOpen=!aiOpen;document.getElementById('aiPanel').classList.toggle('open',aiOpen);}
+    function addAIMsg(r,h){const m=document.getElementById('aiMsgs');const d=document.createElement('div');d.className='flex gap-2 mb-3 '+(r==='user'?'flex-row-reverse':'');d.innerHTML=`<div class="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-sm ${r==='ai'?'bg-gradient-to-br from-cyan-500 to-blue-500':'bg-slate-600'}">${r==='ai'?'🤖':'👤'}</div><div class="max-w-xs p-3 rounded-2xl text-sm ${r==='ai'?'bg-slate-700 rounded-bl-sm':'bg-gradient-to-br from-cyan-600 to-blue-600 rounded-br-sm'}">${h}</div>`;m.appendChild(d);m.scrollTop=m.scrollHeight;}
+    function showQuick(acts){document.getElementById('aiQuick').innerHTML=acts.map(a=>`<button class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded-full text-xs" onclick="q('${a}')">${a}</button>`).join('');}
+    function q(x){document.getElementById('aiInput').value=x.replace(/[📊⚡📈🔮]/g,'').trim();sendAI();}
+    function sendAI(){const i=document.getElementById('aiInput');const v=i.value.trim();if(!v)return;addAIMsg('user',v);i.value='';setTimeout(()=>{
+        let ans='';
+        if(v.includes('瓶颈')||v.includes('哪个环节'))ans='🔴 <b>当前最大瓶颈：整备翻新环节</b><br><br>整备平均耗时18.7h，占上架总时效的44%，其中喷漆工位等待占3h，配件等待占2.2h。<br><br>建议优先级：<br>1. 喷漆工位扩充（可降本增效最大）<br>2. 配件前置备货<br>3. 快喷工艺引入<br><br><button class="mt-2 px-3 py-1 bg-cyan-600 rounded-full text-xs" onclick="createAction(\'整备产能扩充\')">生成详细方案</button>';
+        else if(v.includes('整备')||v.includes('超时'))ans='🔍 <b>整备环节超时根因分析</b><br><br><b>现象</b>：整备平均18.7h，目标≤12h<br><br><b>拆解</b>：<br>• 排队等待：4.3h（23%）<br>• 喷漆：7.2h（39%）←最大<br>• 配件等待：2.2h（12%）<br>• 其他施工：5.0h（26%）<br><br><b>根因</b>：<br>1. 喷漆工位仅3个，日均产能45台vs需求62台<br>2. 常用外采配件无备货，等待供应商配送<br>3. C/D级车况车集中进整备，导致排队';
+        else if(v.includes('36')||v.includes('压缩')||v.includes('提升')||v.includes('如何'))ans='🎯 <b>上架时效42h→36h 达成路径</b><br><br>可压缩空间约6.3h：<br><br>1. <b>喷漆工位+快喷工艺</b>：-3.5h<br>2. <b>配件本地备货</b>：-1.5h<br>3. <b>检测-整备并行</b>：-0.8h<br>4. <b>定价前置</b>（检测时预定价）：-0.5h<br><br><b>投入产出</b>：新增1个喷漆工位约15万，月增产能510台，单车等待成本降低约80元，ROI≈2.8个月<br><br><button class="mt-2 px-3 py-1 bg-cyan-600 rounded-full text-xs" onclick="createAction(\'整备产能扩充\')">生成行动方案</button>';
+        else if(v.includes('ETA')||v.includes('准确率')||v.includes('预测'))ans='🎯 <b>ETA准确率提升路径</b><br><br>当前92.4%，目标≥95%<br><br><b>误差来源</b>：<br>• 整备时间波动：占误差的48%（车况差异大）<br>• 物流时效波动：32%（天气/承运商）<br>• 过户排队：15%（车管所因素）<br>• 其他：5%<br><br><b>提升手段</b>：<br>1. <b>更细粒度的车况分类</b>：目前4级→扩充到8级，整备时间预测更准<br>2. <b>分承运商时效模型</b>：每个承运商单独建模<br>3. <b>实时ETA修正</b>：车辆进入每个环节后更新预测<br>4. <b>异常感知</b>：识别排队/滞留后主动调整ETA并通知客户';
+        else if(v.includes('标准化')||v.includes('非标'))ans='📋 <b>二手车非标品流程标准化方案</b><br><br>二手车非标核心在于车况差异→整备时间差异大：<br><br>1. <b>车况分级标准化</b>：A/B/C/D四级→细化为A1/A2/B1/B2/C1/C2/D共7级，每级对应标准整备SOP和标准工时<br>2. <b>整备SOP标准化</b>：每级车况的必做项目、选做项目、标准工时、标准配件包<br>3. <b>定价模板标准化</b>：按车况级别×车型级别预设定价区间<br>4. <b>异常流程标准化</b>：发现重大问题的升级路径、审批流<br><br>这是ETA准确率从80%→95%+的基础。';
+        else ans='我可以帮你：<br><br>📊 <b>分析类</b>：瓶颈识别、环节拆解、根因分析、趋势对比<br>⚡ <b>策略类</b>：产能规划、排班优化、物流路径、SOP标准化<br>📈 <b>预测类</b>：ETA预测模型、时效预测、产能需求预测<br>🔮 <b>模拟类</b>："如果新增X个工位，时效能降到多少"<br><br>请具体描述你的问题，或者试试点击下方按钮。';
+        addAIMsg('ai',ans);showQuick(['📋生成工单','📊看数据趋势','⚡其他环节分析']);
+    },700);}
+    </script>
+</body>
+</html>
