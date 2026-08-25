@@ -20,6 +20,7 @@
         .tag-green { background:#f6ffed; color:#52c41a; padding:2px 8px; border-radius:4px; font-size:12px; }
         .store-row { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid #e8eaed; border-radius:8px; margin-bottom:8px; transition:all 0.2s; cursor:pointer; }
         .store-row:hover { border-color:#3370ff; background:#f7f9fc; }
+        .store-row.selected { border-color:#3370ff; background:#f0f5ff; box-shadow:0 0 0 1px #3370ff; }
         .store-row.pushed { opacity:0.6; border-color:#52c41a; background:#f6ffed; }
         .data-source-card { border:2px solid #e8eaed; border-radius:12px; padding:20px; cursor:pointer; transition:all 0.2s; }
         .data-source-card:hover { border-color:#3370ff; }
@@ -324,11 +325,14 @@ ORDER BY
                     <div class="bg-gray-100 p-6 flex justify-center" id="previewArea">
                         <div class="text-center text-gray-400 py-16 text-sm">← 点击左侧门店查看推送效果</div>
                     </div>
-                    <div class="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
-                        <div class="text-xs text-gray-500">📌 卡片将通过飞书机器人推送到门店负责人（@feishu_open_id）</div>
+                    <div class="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 gap-3">
+                        <div class="text-xs text-gray-500 flex items-center gap-2">
+                            <span>📌 发送前请配置Webhook：</span>
+                            <button onclick="quickSetWebhook()" class="text-blue-500 hover:underline" id="webhookStatusBtn">⚙️ 点击配置</button>
+                        </div>
                         <div class="flex gap-2">
-                            <button onclick="copyCardJson()" class="px-3 py-1.5 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📋 复制卡片JSON</button>
-                            <button onclick="simulatePush()" id="simulateBtn" class="px-4 py-1.5 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:opacity-50" disabled>📤 发送飞书</button>
+                            <button onclick="copyCardJson()" class="px-3 py-1.5 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📋 复制JSON</button>
+                            <button onclick="sendToFeishu()" id="simulateBtn" class="px-4 py-1.5 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:opacity-50" disabled>📤 发送到飞书</button>
                         </div>
                     </div>
                 </div>
@@ -516,20 +520,63 @@ function loadSample(){
 function parseCSV(text){
     const lines = text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(l=>l.trim());
     if(!lines.length) return [];
-    const headers = lines[0].split(',').map(h=>h.trim());
+    const headers = lines[0].split(',').map(h=>h.trim().replace(/^["']|["']$/g,''));
     return lines.slice(1).map(line=>{
         const vals=[]; let cur=''; let inQ=false;
         for(let i=0;i<line.length;i++){
             const c=line[i];
             if(c==='"'){ if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ; }
+            else if(c==="'"&&!inQ){}
             else if(c===','&&!inQ){vals.push(cur);cur='';}
             else cur+=c;
         }
         vals.push(cur);
         const obj={};
-        headers.forEach((h,i)=>obj[h]=vals[i]?vals[i].trim():'');
+        headers.forEach((h,i)=>{
+            let v=(vals[i]||'').trim().replace(/^["']|["']$/g,'');
+            obj[h]=v;
+        });
         return obj;
     });
+}
+
+function normalizeField(obj,std,aliases){
+    for(const a of aliases){
+        if(obj[a]!==undefined&&obj[a]!=='') return obj[a];
+    }
+    if(obj[std]!==undefined) return obj[std];
+    return '';
+}
+
+function normalizeData(j){
+    return j.map(r=>{
+        const o={};
+        const keys=Object.keys(r);
+        const findKey=(names)=>{
+            for(const n of names){
+                for(const k of keys){
+                    if(k.replace(/\s+/g,'')===n.replace(/\s+/g,'')) return k;
+                }
+            }
+            return null;
+        };
+        const getVal=(names,def='')=>{
+            const k=findKey(names);
+            return k!==null?(r[k]===null||r[k]===undefined?'':String(r[k]).trim()):def;
+        };
+        o['车架号']=getVal(['车架号','VIN','vin','车架号码']);
+        o['车型']=getVal(['车型','车辆型号','车款','车辆名称']);
+        o['门店']=getVal(['门店','门店名称','店铺名称','店铺']);
+        o['负责人']=getVal(['负责人','门店负责人','店长','责任人']);
+        o['负责人飞书ID']=getVal(['负责人飞书ID','飞书ID','飞书OpenID','feishu_id','open_id','飞书账号']);
+        o['当前环节']=getVal(['当前环节','所处环节','当前节点','环节','状态']);
+        o['进入环节时间']=getVal(['进入环节时间','进入时间','滞留开始时间','开始时间']);
+        o['是否超期']=getVal(['是否超期','超期','是否逾期']);
+        const daysStr=getVal(['超期天数','超期天数(天)','逾期天数','滞留天数','超期时长'],'0');
+        const daysNum=parseFloat(daysStr.replace(/[^\d.]/g,''));
+        o['超期天数']=isNaN(daysNum)?0:daysNum;
+        return o;
+    }).filter(r=>r['车架号']&&r['门店']);
 }
 
 function handleFile(e){ if(e.target.files[0]){
@@ -547,14 +594,20 @@ function handleFile(e){ if(e.target.files[0]){
                 const ws=wb.Sheets[wb.SheetNames[0]];
                 j=XLSX.utils.sheet_to_json(ws,{defval:''});
             }
-            rawData=j.map(r=>({...r,'超期天数':Number(r['超期天数']||0),'是否超期':r['是否超期']||''})).filter(r=>r['车架号']);
-            if(!rawData.length){alert('未解析到有效数据，请检查文件格式');return;}
+            rawData=normalizeData(j);
+            if(!rawData.length){alert('未解析到有效数据。\n\n请检查文件表头是否包含：车架号、门店、超期天数等字段。\n如果你的列名不同，系统会尝试自动匹配常见别名。');return;}
+            const fields=Object.keys(rawData[0]);
+            const sampleStore=rawData[0]['门店'];
+            const totalRows=rawData.length;
             dsConfig.configured=true;dsConfig.type='excel';
             document.getElementById('dsLabel').textContent='数据源：'+(isCSV?'CSV':'Excel')+' - '+f.name;
             document.getElementById('dsStatus').className='w-2 h-2 rounded-full bg-green-500';
             selectDsType('excel');
             processData();
-        }catch(err){alert('解析失败：'+err.message+'\n\n请尝试使用CSV格式（UTF-8编码）');}
+            setTimeout(()=>{
+                alert(`✅ 数据解析成功！\n\n共 ${totalRows} 条记录\n门店示例：${sampleStore}\n\n已自动选中第一家门店，请查看右侧预览。`);
+            },200);
+        }catch(err){console.error(err);alert('解析失败：'+err.message+'\n\n请尝试使用CSV格式（UTF-8编码）');}
     };
     if(isCSV) r.readAsText(f,'utf-8');
     else{ try{r.readAsArrayBuffer(f);}catch(e){r.readAsText(f,'utf-8');} }
@@ -598,32 +651,43 @@ function processData(){
     rawData.forEach(r=>{if(r['当前环节'])stageSet.add(r['当前环节']);});
     document.getElementById('filterStage').innerHTML='<option value="">全部环节</option>'+[...stageSet].map(s=>`<option>${s}</option>`).join('');
     pushedStores.clear();renderHistory();
+    const firstStore=Object.keys(storeGroups)[0];
+    if(firstStore) setTimeout(()=>selectStore(firstStore),100);
 }
 
 function renderStoreList(){
     const el=document.getElementById('storeList');
     const entries=Object.entries(storeGroups).sort((a,b)=>b[1].vehicles.filter(v=>v._level!=='normal').length-a[1].vehicles.filter(v=>v._level!=='normal').length);
-    el.innerHTML=entries.map(([name,g])=>{
+    if(!entries.length){el.innerHTML='<div class="text-center text-gray-400 py-8 text-sm">暂无超期车辆 🎉</div>';return;}
+    el.innerHTML='';
+    entries.forEach(([name,g])=>{
         const over=g.vehicles.filter(v=>v._level!=='normal');
         const p0=g.vehicles.filter(v=>v._level==='P0').length;
         const pushed=pushedStores.has(name);
-        return `<div class="store-row ${pushed?'pushed':''}" onclick="selectStore('${name}')">
-            <div><div class="font-medium text-gray-800 text-sm">🏪 ${name}</div>
-            <div class="text-xs text-gray-500 mt-0.5">${g.manager} ${g.feishuId?'<span class="text-blue-500">@'+g.feishuId.substring(0,8)+'...</span>':''} ${pushed?'<span class="text-green-600">· ✅ 已推送</span>':''}</div></div>
+        const div=document.createElement('div');
+        div.className='store-row'+(pushed?' pushed':'');
+        div.innerHTML=`<div><div class="font-medium text-gray-800 text-sm">🏪 ${name}</div>
+            <div class="text-xs text-gray-500 mt-0.5">${g.manager||'未指定'} ${g.feishuId?'<span class="text-blue-500">@'+g.feishuId.substring(0,8)+'...</span>':''} ${pushed?'<span class="text-green-600">· ✅ 已推送</span>':''}</div></div>
             <div class="text-right"><div class="flex gap-1 justify-end mb-1">
                 ${p0>0?`<span class="tag-red">${p0}台P0</span>`:''}
                 ${over.length-p0>0?`<span class="tag-orange">${over.length-p0}台</span>`:''}
-            </div><div class="text-xs text-gray-400">共${g.vehicles.length}台</div></div>
-        </div>`;
-    }).join('')||'<div class="text-center text-gray-400 py-8 text-sm">暂无超期车辆 🎉</div>';
+            </div><div class="text-xs text-gray-400">共${g.vehicles.length}台</div></div>`;
+        div.addEventListener('click',()=>selectStore(name));
+        el.appendChild(div);
+    });
 }
 
 function selectStore(name){
     currentStore=name;const g=storeGroups[name];
-    document.getElementById('previewReceiver').textContent=name+' · '+g.manager;
+    if(!g){console.error('Store not found:',name);return;}
+    document.querySelectorAll('.store-row').forEach(r=>r.classList.remove('selected'));
+    const rows=document.querySelectorAll('.store-row');
+    rows.forEach(r=>{if(r.textContent.includes(name))r.classList.add('selected');});
+    document.getElementById('previewReceiver').textContent=name+' · '+(g.manager||'未指定');
     document.getElementById('previewStatus').textContent='待推送';document.getElementById('previewStatus').className='px-2 py-0.5 bg-orange-100 text-orange-600 rounded';
     document.getElementById('simulateBtn').disabled=false;
-    renderPreview(name,g);renderDetailTable();
+    try{ renderPreview(name,g); }catch(e){console.error('Preview error:',e);document.getElementById('previewArea').innerHTML='<div class="text-red-500 text-sm p-4">预览渲染出错：'+e.message+'</div>';}
+    try{ renderDetailTable(); }catch(e){console.error('Detail error:',e);}
 }
 
 function renderPreview(name,g){
@@ -632,36 +696,25 @@ function renderPreview(name,g){
     const stageMap={};over.forEach(v=>{const s=v['当前环节']||'未知';stageMap[s]=(stageMap[s]||0)+1;});
     const mx=Math.max(...Object.values(stageMap),1);
     const today=new Date().toLocaleDateString('zh-CN');
+    const stageBars=Object.keys(stageMap).length?Object.entries(stageMap).sort((a,b)=>b[1]-a[1]).map(([s,c])=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px"><span style="width:80px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s}</span><div style="flex:1;height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden"><div style="width:${c/mx*100}%;height:100%;background:#3370ff;border-radius:3px"></div></div><span style="width:30px;text-align:right;color:#333">${c}台</span></div>`).join(''):'';
+    const headerColor=p0>0?'linear-gradient(90deg,#f54a45 0%,#ff7d00 100%)':'linear-gradient(90deg,#ff7d00 0%,#faad14 100%)';
     document.getElementById('previewArea').innerHTML=`<div class="feishu-card">
-        <div class="feishu-header">
-            <div class="font-semibold">🚨 ${name} · 超期车辆预警日报</div>
-            <div class="text-xs opacity-80 mt-1">${today} · 共${over.length}台超期${p0>0?' · <font color="yellow">'+p0+'台严重</font>':''}</div>
+        <div class="feishu-header" style="background:${headerColor}">
+            <div class="font-semibold">🚨 ${name} · 超期车辆预警日报 ${p0>0?'[P0紧急]':''}</div>
+            <div class="text-xs opacity-80 mt-1">${today} · 共${over.length}台超期${p0>0?' · '+p0+'台P0严重':''}</div>
         </div>
         <div class="feishu-body">
-            <div style="margin-bottom:12px"><at id="${g.feishuId||''}"></at> ${g.manager}，您好：今日盘点发现您门店有<b style="color:#f54a45">${over.length}台</b>车辆超期，请及时跟进：</div>
+            <div style="margin-bottom:12px;font-size:14px;line-height:1.6">📅 ${today}<br>负责人 <b>${g.manager||'未指定'}</b>，您好：今日盘点发现您门店有<b style="color:#f54a45">${over.length}台</b>车辆超期，请及时跟进处理：</div>
             <div style="display:flex;gap:8px;margin-bottom:12px">
                 ${p0>0?`<div style="flex:1;background:#fef0f0;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:700;color:#f54a45">${p0}</div><div style="font-size:12px;color:#f54a45">严重P0</div></div>`:''}
                 <div style="flex:1;background:#fff3e0;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:700;color:#ff7d00">${p1}</div><div style="font-size:12px;color:#ff7d00">超期P1</div></div>
                 <div style="flex:1;background:#fffbe6;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:700;color:#faad14">${p2}</div><div style="font-size:12px;color:#faad14">预警P2</div></div>
             </div>
-            ${Object.keys(stageMap).length?`<div style="margin-bottom:12px"><div style="font-size:13px;color:#646a73;margin-bottom:6px">环节分布</div>
-            ${Object.entries(stageMap).map(([s,c])=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px"><span style="width:80px;color:#333">${s}</span><div style="flex:1;height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden"><div style="width:${c/mx*100}%;height:100%;background:#3370ff;border-radius:3px"></div></div><span style="width:30px;text-align:right;color:#333">${c}台</span></div>`).join('')}</div>`:''}
-            <div style="font-size:12px;color:#8f959e;margin-bottom:10px">💡 P0车辆请优先处理，今日18:00前反馈进度</div>
-            <div><button class="feishu-btn">📋 查看明细</button><button class="feishu-btn secondary">✅ 批量处理</button></div>
+            ${stageBars?`<div style="margin-bottom:12px"><div style="font-size:13px;color:#646a73;margin-bottom:6px">环节分布</div>${stageBars}</div>`:''}
+            <div style="background:#f7f9fc;border-left:3px solid #3370ff;padding:8px 12px;border-radius:4px;font-size:12px;color:#646a73;margin-bottom:10px;line-height:1.5">💡 <b>处理要求</b>：P0严重超期车辆请优先处理，今日18:00前在系统中反馈处理进度。如遇无法解决的问题，请及时升级。</div>
+            <div><button class="feishu-btn">📋 查看超期明细</button><button class="feishu-btn secondary">✅ 我已知悉</button></div>
         </div></div>`;
-    window._cardJson=JSON.stringify({msg_type:'interactive',card:{header:{title:{tag:'plain_text',content:`🚨 ${name} 超期预警`},template:p0>0?'red':'orange'},elements:[
-        {tag:'div',text:{tag:'lark_md',content:`<at user_id="${g.feishuId||''}"></at> **${g.manager}**：您门店有 **${over.length}台** 超期车辆${p0>0?`，其中 <font color='red'>**${p0}台严重**</font>`:''}，请及时处理。`}},
-        {tag:'div',fields:[
-            {is_short:true,text:{tag:'lark_md',content:`**🔴 P0严重**\n<font color='red'>${p0}台</font>`}},
-            {is_short:true,text:{tag:'lark_md',content:`**🟠 P1超期**\n<font color='orange'>${p1}台</font>`}},
-            {is_short:true,text:{tag:'lark_md',content:`**🟡 P2预警**\n<font color='yellow'>${p2}台</font>`}},
-            {is_short:true,text:{tag:'lark_md',content:`**总计**\n${over.length}台`}}
-        ]},
-        {tag:'action',actions:[
-            {tag:'button',text:{tag:'plain_text',content:'📋 查看明细'},type:'primary'},
-            {tag:'button',text:{tag:'plain_text',content:'✅ 标记处理'},type:'default'}
-        ]}
-    ]}},null,2);
+    window._cardJson=JSON.stringify(buildCardPayload(name,g),null,2);
 }
 
 function renderDetailTable(){
@@ -681,24 +734,143 @@ function renderDetailTable(){
 
 function markHandled(vin){alert('已标记 '+vin+' 为处理中\n真实场景下会回写Hive/业务系统，关闭预警，并记录处理人/时间。');}
 
-function simulatePush(){
-    if(!currentStore)return;
-    const btn=document.getElementById('simulateBtn');btn.disabled=true;btn.textContent='发送中...';
-    setTimeout(()=>{
-        pushedStores.add(currentStore);renderStoreList();
-        document.getElementById('previewStatus').textContent='已推送 ✅';document.getElementById('previewStatus').className='px-2 py-0.5 bg-green-100 text-green-600 rounded';
-        addHistory(currentStore,'push','飞书卡片推送给 '+storeGroups[currentStore].manager+' @'+(storeGroups[currentStore].feishuId||'').substring(0,8));
-        btn.textContent='📤 再次发送';btn.disabled=false;
-    },800);
+function getWebhook(){
+    try{return localStorage.getItem('feishu_webhook')||'';}catch(e){return '';}
+}
+function setWebhook(url){
+    try{localStorage.setItem('feishu_webhook',url);}catch(e){}
+    updateWebhookStatus();
+}
+function updateWebhookStatus(){
+    const wh=getWebhook();
+    const btn=document.getElementById('webhookStatusBtn');
+    if(!btn)return;
+    if(wh){btn.textContent='✅ Webhook已配置';btn.className='text-green-600 hover:underline';}
+    else{btn.textContent='⚙️ 点击配置Webhook';btn.className='text-blue-500 hover:underline';}
+}
+function quickSetWebhook(){
+    const wh=getWebhook();
+    const url=prompt('请输入飞书自定义机器人Webhook地址：\n\n（在飞书群→群设置→群机器人→添加自定义机器人→复制Webhook）\n\n示例：https://open.feishu.cn/open-apis/bot/v2/hook/xxx',wh||'https://open.feishu.cn/open-apis/bot/v2/hook/');
+    if(url===null)return;
+    if(url.trim()){setWebhook(url.trim());alert('✅ Webhook已保存！\n\n现在可以点击「发送到飞书」按钮真实推送了。');}
 }
 
-function pushAll(){
-    const btn=document.getElementById('pushAllBtn');btn.disabled=true;btn.textContent='推送中...';
+function buildCardPayload(name,g){
+    const over=g.vehicles.filter(v=>v._level!=='normal');
+    const p0=g.vehicles.filter(v=>v._level==='P0').length,p1=g.vehicles.filter(v=>v._level==='P1').length,p2=g.vehicles.filter(v=>v._level==='P2').length;
+    const stageMap={};over.forEach(v=>{const s=v['当前环节']||'未知';stageMap[s]=(stageMap[s]||0)+1;});
+    let stageText='';
+    if(Object.keys(stageMap).length){
+        stageText='**各环节超期分布**\n';
+        Object.entries(stageMap).sort((a,b)=>b[1]-a[1]).forEach(([s,c])=>{
+            const bar='█'.repeat(Math.min(c,10))+'░'.repeat(Math.max(0,10-c));
+            stageText+=`${s} ${bar} ${c}台\n`;
+        });
+    }
+    const today=new Date().toLocaleDateString('zh-CN');
+    return {
+        msg_type:'interactive',
+        card:{
+            config:{wide_screen_mode:true},
+            header:{
+                title:{tag:'plain_text',content:`🚨 ${name} · 超期车辆预警日报 ${p0>0?'[P0紧急]':''}`},
+                template:p0>0?'red':'orange'
+            },
+            elements:[
+                {tag:'div',text:{tag:'lark_md',content:`📅 ${today}\n负责人 **${g.manager||'未指定'}**，您好：今日盘点发现您门店有 <font color='red'>**${over.length}台**</font> 车辆在供应链环节中超期，请及时跟进处理。`}},
+                {tag:'hr'},
+                {tag:'div',fields:[
+                    {is_short:true,text:{tag:'lark_md',content:`**🔴 严重超期P0（≥3天）**\n<font color='red'>${p0}台</font>`}},
+                    {is_short:true,text:{tag:'lark_md',content:`**🟠 超期P1（≥1天）**\n<font color='orange'>${p1}台</font>`}},
+                    {is_short:true,text:{tag:'lark_md',content:`**🟡 预警P2（即将到期）**\n<font color='orange'>${p2}台</font>`}},
+                    {is_short:true,text:{tag:'lark_md',content:`**总计超期**\n${over.length}台`}}
+                ]},
+                ...(stageText?[{tag:'div',text:{tag:'lark_md',content:'```text\n'+stageText+'```'}}]:[]),
+                {tag:'hr'},
+                {tag:'div',text:{tag:'lark_md',content:'> 💡 **处理要求**：P0严重超期车辆请优先处理，今日18:00前在系统中反馈处理进度。如遇无法解决的问题，请及时升级。'}},
+                {tag:'action',actions:[
+                    {tag:'button',text:{tag:'plain_text',content:'📋 查看超期明细'},type:'primary',url:'https://example.com/overdue?store='+encodeURIComponent(name)},
+                    {tag:'button',text:{tag:'plain_text',content:'✅ 我已知悉'},type:'default',value:{store:name,action:'ack'}}
+                ]}
+            ]
+        }
+    };
+}
+
+async function sendToFeishu(){
+    if(!currentStore)return;
+    const webhook=getWebhook();
+    if(!webhook){
+        alert('⚠️ 请先配置飞书机器人Webhook！\n\n1. 在飞书群→群设置→群机器人→添加"自定义机器人"\n2. 复制Webhook地址\n3. 点击预览区下方的「⚙️ 点击配置」按钮粘贴地址');
+        quickSetWebhook();
+        return;
+    }
+    const btn=document.getElementById('simulateBtn');
+    btn.disabled=true;btn.textContent='发送中...';
+    const g=storeGroups[currentStore];
+    const payload=buildCardPayload(currentStore,g);
+    window._cardJson=JSON.stringify(payload,null,2);
+    try{
+        const resp=await fetch(webhook,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(payload),
+            mode:'cors'
+        });
+        let result={};
+        try{result=await resp.json();}catch(e){}
+        if(resp.ok&&(result.code===0||result.StatusCode===0||result.msg==='success'||!result.code)){
+            pushedStores.add(currentStore);renderStoreList();
+            document.getElementById('previewStatus').textContent='已推送 ✅';
+            document.getElementById('previewStatus').className='px-2 py-0.5 bg-green-100 text-green-600 rounded';
+            addHistory(currentStore,'push','✅ 飞书推送成功：'+g.manager);
+            btn.textContent='📤 再次发送';btn.disabled=false;
+            alert('✅ 发送成功！请查看飞书群是否收到卡片消息。');
+        }else{
+            const err=JSON.stringify(result);
+            addHistory(currentStore,'push','❌ 发送失败: '+(result.msg||err));
+            btn.textContent='📤 重试发送';btn.disabled=false;
+            alert('❌ 发送失败：\n'+(result.msg||err)+'\n\n常见问题：\n1. Webhook地址是否正确\n2. 机器人是否在群里\n3. 如果是跨域问题，请点击「复制JSON」在飞书调试工具手动发送');
+        }
+    }catch(err){
+        addHistory(currentStore,'push','❌ 网络错误: '+err.message);
+        btn.textContent='📤 重试发送';btn.disabled=false;
+        alert('❌ 网络错误：'+err.message+'\n\n这通常是浏览器跨域（CORS）限制导致的。\n\n解决方案：\n1. 点击「📋 复制JSON」复制卡片内容\n2. 打开飞书消息卡片搭建工具 https://open.feishu.cn/tool/cardbuilder\n3. 粘贴JSON后点「发送」选择群即可\n\n或者把这个HTML部署到公司内网服务器上使用（与飞书同域）。');
+    }
+}
+
+async function pushAll(){
+    const webhook=getWebhook();
     const stores=Object.keys(storeGroups).filter(s=>!pushedStores.has(s)&&storeGroups[s].vehicles.some(v=>v._level!=='normal'));
-    let i=0;const t=setInterval(()=>{if(i>=stores.length){clearInterval(t);btn.textContent='🚀 一键全部推送';btn.disabled=false;return;}
-        pushedStores.add(stores[i]);addHistory(stores[i],'push','批量推送给 '+storeGroups[stores[i]].manager);renderStoreList();
-        if(currentStore===stores[i]){document.getElementById('previewStatus').textContent='已推送 ✅';document.getElementById('previewStatus').className='px-2 py-0.5 bg-green-100 text-green-600 rounded';}i++;
-    },300);
+    if(!stores.length){alert('没有需要推送的门店');return;}
+    if(!webhook){
+        if(!confirm('⚠️ 未配置飞书Webhook，只能模拟推送效果。\n\n是否先配置Webhook再真实推送？\n\n点「确定」去配置，点「取消」仅做模拟预览。')){
+            const btn=document.getElementById('pushAllBtn');btn.disabled=true;btn.textContent='模拟推送中...';
+            let i=0;const t=setInterval(()=>{if(i>=stores.length){clearInterval(t);btn.textContent='🚀 一键全部推送';btn.disabled=false;return;}
+                pushedStores.add(stores[i]);addHistory(stores[i],'push','模拟推送给 '+storeGroups[stores[i]].manager);renderStoreList();
+                if(currentStore===stores[i]){document.getElementById('previewStatus').textContent='模拟已推送';document.getElementById('previewStatus').className='px-2 py-0.5 bg-gray-100 text-gray-600 rounded';}i++;
+            },300);
+            return;
+        }
+        quickSetWebhook();
+        return;
+    }
+    const btn=document.getElementById('pushAllBtn');btn.disabled=true;btn.textContent='批量推送中 0/'+stores.length;
+    let ok=0,fail=0;
+    for(let i=0;i<stores.length;i++){
+        btn.textContent='批量推送中 '+(i+1)+'/'+stores.length;
+        const s=stores[i];const g=storeGroups[s];
+        try{
+            const resp=await fetch(webhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(buildCardPayload(s,g)),mode:'cors'});
+            const r=await resp.json().catch(()=>({}));
+            if(resp.ok&&(r.code===0||!r.code)){pushedStores.add(s);ok++;addHistory(s,'push','✅ 批量推送成功：'+g.manager);}
+            else{fail++;addHistory(s,'push','❌ 失败: '+(r.msg||'错误'));}
+        }catch(e){fail++;addHistory(s,'push','❌ 网络错误');}
+        await new Promise(r=>setTimeout(r,200));
+        renderStoreList();
+    }
+    btn.textContent='🚀 一键全部推送';btn.disabled=false;
+    alert(`批量推送完成！\n\n✅ 成功：${ok}家\n❌ 失败：${fail}家\n\n失败的门店可单独点击「发送到飞书」重试。`);
 }
 
 function addHistory(store,type,desc){pushHistory.unshift({time:new Date().toLocaleTimeString('zh-CN',{hour12:false}),store,type,desc});renderHistory();}
@@ -725,6 +897,10 @@ function exportData(data,fn){
     const a=document.createElement('a');a.href=url;a.download=fn;
     document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
+document.addEventListener('DOMContentLoaded',()=>{
+    updateWebhookStatus();
+    selectDsType('excel');
+});
 </script>
 </body>
 </html>
