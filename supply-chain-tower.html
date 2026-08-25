@@ -529,11 +529,7 @@ function selectVehicle(vin) {
         <div class="mb-4">
             <div class="text-sm font-medium mb-2">环节时间轴</div>
             <div class="grid grid-cols-9 gap-1 text-xs text-center">
-                ${['留资','收车','检测','报告','整备','质检','定价','上架',v.stage].map((s,i)=>{
-                    const cur = i < 5 ? (i<4?'done':(i===4?(v.stageCode.startsWith('prep')?'active':'done'):'pending')) : (v.stageCode.startsWith('prep')||v.stageCode==='check'?(i===4?'active':'pending'):(v.stageCode==='pricing'&&i===6?'active':(v.stageCode==='photo'&&i===7?'active':'pending')));
-                    const delayed = (cur==='active'&&v.delay>0) ? 'delayed' : cur;
-                    return `<div class="timeline-dot ${delayed}" style="padding-top:24px">${s}</div>`;
-                }).join('')}
+                ${renderTimeline(v)}
             </div>
         </div>
         <div class="grid grid-cols-2 gap-2 text-xs mb-4">
@@ -561,17 +557,51 @@ function selectVehicle(vin) {
 
 function feedbackVehicle(vin, type) {
     const txt = type==='done'?'✅ 已反馈：阶段完成':type==='issue'?'🚧 已反馈问题，等待策略中心调整':'⬆️ 已升级至策略中心';
-    alert(txt+'\n\n[闭环效果]\n执行反馈 → 策略中心看到实际情况 → 修正SKILL参数 → 策略更精准\n这就是持续提升模型准确度的核心闭环。');
+    alert(txt+'\n\n[闭环效果]\n执行反馈 -> 策略中心看到实际情况 -> 修正SKILL参数 -> 策略更精准\n这就是持续提升模型准确度的核心闭环。');
+}
+
+function renderTimeline(v) {
+    var stages = ['留资','收车','检测','报告','整备','质检','定价','上架'];
+    var currentIdx = 4;
+    if(v.stageCode==='check') currentIdx = 2;
+    else if(v.stageCode==='pricing') currentIdx = 6;
+    else if(v.stageCode==='photo') currentIdx = 7;
+    else if(v.stageCode.startsWith('prep')) currentIdx = 4;
+    else if(v.stageCode.startsWith('logistics')) currentIdx = 7;
+    else if(v.stageCode==='transfer') currentIdx = 6;
+    else if(v.stageCode==='delivery') currentIdx = 7;
+    var html = '';
+    for(var i=0;i<8;i++) {
+        var cls = 'pending';
+        if(i<currentIdx) cls='done';
+        else if(i===currentIdx) cls = v.delay>0?'delayed':'active';
+        html += '<div class="timeline-dot '+cls+'" style="padding-top:24px">'+stages[i]+'</div>';
+    }
+    return html;
 }
 
 function initCharts() {
-    Chart.defaults.color = '#94a3b8'; Chart.defaults.borderColor = 'rgba(148,163,184,0.1)';
-    const labels = ['W1','W2','W3','W4','W5','W6','W7','W8'];
-    new Chart(document.getElementById('effectChart'),{type:'line',data:{labels,datasets:[
-        {label:'上架时效(h)',data:[52,49,47,45,44,43,42,42.3],borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.1)',fill:true,tension:0.4,yAxisID:'y'},
-        {label:'策略输出(条)',data:[2,1,3,2,2,1,3,4],borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,0.1)',fill:false,tension:0.3,type:'bar',yAxisID:'y1'},
-        {label:'目标线 48h',data:Array(8).fill(48),borderColor:'#ef4444',borderDash:[5,5],pointRadius:0,yAxisID:'y'}
-    ]},options:{interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:11}}}},scales:{y:{position:'left',grid:{color:'rgba(148,163,184,0.05)'},min:30,max:60},y1:{position:'right',grid:{display:false},min:0,max:10},x:{grid:{display:false}}}}}});
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.borderColor = 'rgba(148,163,184,0.1)';
+    var labels = ['W1','W2','W3','W4','W5','W6','W7','W8'];
+    var data = {
+        labels: labels,
+        datasets: [
+            {label:'上架时效(h)', data:[52,49,47,45,44,43,42,42.3], borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.1)', fill:true, tension:0.4, yAxisID:'y'},
+            {label:'策略输出(条)', data:[2,1,3,2,2,1,3,4], borderColor:'#8b5cf6', backgroundColor:'rgba(139,92,246,0.1)', fill:false, tension:0.3, type:'bar', yAxisID:'y1'},
+            {label:'目标线 48h', data:[48,48,48,48,48,48,48,48], borderColor:'#ef4444', borderDash:[5,5], pointRadius:0, yAxisID:'y'}
+        ]
+    };
+    var options = {
+        interaction: {mode:'index', intersect:false},
+        plugins: {legend:{position:'top', labels:{boxWidth:12, font:{size:11}}}},
+        scales: {
+            y: {position:'left', grid:{color:'rgba(148,163,184,0.05)'}, min:30, max:60},
+            y1: {position:'right', grid:{display:false}, min:0, max:10},
+            x: {grid:{display:false}}
+        }
+    };
+    new Chart(document.getElementById('effectChart'), {type:'line', data:data, options:options});
 }
 
 function useSkill(name) {
