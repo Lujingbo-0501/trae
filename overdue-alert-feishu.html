@@ -691,13 +691,39 @@ function selectStore(name){
 }
 
 function renderPreview(name,g){
-    const over=g.vehicles.filter(v=>v._level!=='normal');
+    const over=g.vehicles.filter(v=>v._level!=='normal').sort((a,b)=>b['超期天数']-a['超期天数']);
     const p0=g.vehicles.filter(v=>v._level==='P0').length,p1=g.vehicles.filter(v=>v._level==='P1').length,p2=g.vehicles.filter(v=>v._level==='P2').length;
     const stageMap={};over.forEach(v=>{const s=v['当前环节']||'未知';stageMap[s]=(stageMap[s]||0)+1;});
     const mx=Math.max(...Object.values(stageMap),1);
     const today=new Date().toLocaleDateString('zh-CN');
     const stageBars=Object.keys(stageMap).length?Object.entries(stageMap).sort((a,b)=>b[1]-a[1]).map(([s,c])=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px"><span style="width:80px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s}</span><div style="flex:1;height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden"><div style="width:${c/mx*100}%;height:100%;background:#3370ff;border-radius:3px"></div></div><span style="width:30px;text-align:right;color:#333">${c}台</span></div>`).join(''):'';
     const headerColor=p0>0?'linear-gradient(90deg,#f54a45 0%,#ff7d00 100%)':'linear-gradient(90deg,#ff7d00 0%,#faad14 100%)';
+    const detailUrl=getDetailUrl();
+    const hasDetailUrl=!!detailUrl;
+    const ackUrl=getAckUrl();
+    let detailBlock='';
+    if(!hasDetailUrl && over.length){
+        const show=over.slice(0,6);
+        detailBlock=`<div style="margin-bottom:12px">
+            <div style="font-size:13px;font-weight:500;color:#333;margin-bottom:6px">📋 超期明细（TOP ${show.length}/${over.length}台）</div>
+            <div style="font-size:12px;border:1px solid #e8eaed;border-radius:6px;overflow:hidden">
+            <div style="background:#fafafa;display:grid;grid-template-columns:50px 55px 90px 1fr 100px;padding:6px 8px;font-weight:500;color:#646a73;border-bottom:1px solid #e8eaed">
+                <span>等级</span><span>天数</span><span>车架号</span><span>车型</span><span>当前环节</span>
+            </div>
+            ${show.map(v=>`<div style="display:grid;grid-template-columns:50px 55px 90px 1fr 100px;padding:5px 8px;border-bottom:1px solid #f0f0f0;font-size:12px">
+                <span>${v._level==='P0'?'<span class="tag-red">P0</span>':v._level==='P1'?'<span class="tag-orange">P1</span>':'<span class="tag-yellow">P2</span>'}</span>
+                <span style="${v._level==='P0'?'color:#f54a45;font-weight:600':v._level==='P1'?'color:#ff7d00':v._level==='P2'?'color:#faad14':''}">${v['超期天数']}天</span>
+                <span style="font-family:monospace;font-size:11px">${String(v['车架号']||'').slice(-8)}</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v['车型']||''}</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v['当前环节']||''}</span>
+            </div>`).join('')}
+            ${over.length>6?`<div style="padding:4px 8px;text-align:center;color:#8f959e;font-size:11px;background:#fafafa">还有${over.length-6}台 · 点击下方「查看完整明细」跳系统</div>`:''}
+            </div></div>`;
+    }
+    const buttons=[
+        `<button class="feishu-btn" onclick="scrollToDetail()">${hasDetailUrl?'📋 查看完整明细':'📋 详见上方明细 / 滚到底部看完整'}</button>`,
+        ackUrl?`<button class="feishu-btn secondary" onclick="markPreviewAck()">✅ 已知悉并处理</button>`:'<button class="feishu-btn secondary" onclick="markPreviewAck()">💡 群内回复确认</button>'
+    ].join('');
     document.getElementById('previewArea').innerHTML=`<div class="feishu-card">
         <div class="feishu-header" style="background:${headerColor}">
             <div class="font-semibold">🚨 ${name} · 超期车辆预警日报 ${p0>0?'[P0紧急]':''}</div>
@@ -711,11 +737,9 @@ function renderPreview(name,g){
                 <div style="flex:1;background:#fffbe6;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:700;color:#faad14">${p2}</div><div style="font-size:12px;color:#faad14">预警P2</div></div>
             </div>
             ${stageBars?`<div style="margin-bottom:12px"><div style="font-size:13px;color:#646a73;margin-bottom:6px">环节分布</div>${stageBars}</div>`:''}
+            ${detailBlock}
             <div style="background:#f7f9fc;border-left:3px solid #3370ff;padding:8px 12px;border-radius:4px;font-size:12px;color:#646a73;margin-bottom:10px;line-height:1.5">💡 <b>处理要求</b>：P0严重超期车辆请优先处理，今日18:00前在系统中反馈处理进度。如遇无法解决的问题，请及时升级。</div>
-            <div>
-                <button class="feishu-btn" onclick="scrollToDetail()">📋 查看超期明细</button>
-                <button class="feishu-btn secondary" onclick="markPreviewAck()">✅ 我已知悉</button>
-            </div>
+            <div>${buttons}</div>
         </div></div>`;
     window._cardJson=JSON.stringify(buildCardPayload(name,g),null,2);
 }
@@ -804,16 +828,35 @@ function markPreviewAck(){
 }
 
 function buildCardPayload(name,g){
-    const over=g.vehicles.filter(v=>v._level!=='normal');
+    const over=g.vehicles.filter(v=>v._level!=='normal').sort((a,b)=>b['超期天数']-a['超期天数']);
     const p0=g.vehicles.filter(v=>v._level==='P0').length,p1=g.vehicles.filter(v=>v._level==='P1').length,p2=g.vehicles.filter(v=>v._level==='P2').length;
     const stageMap={};over.forEach(v=>{const s=v['当前环节']||'未知';stageMap[s]=(stageMap[s]||0)+1;});
     let stageText='';
     if(Object.keys(stageMap).length){
         stageText='**各环节超期分布**\n';
         Object.entries(stageMap).sort((a,b)=>b[1]-a[1]).forEach(([s,c])=>{
-            const bar='█'.repeat(Math.min(c,10))+'░'.repeat(Math.max(0,10-c));
+            const bar='▮'.repeat(Math.min(c,10))+'▯'.repeat(Math.max(0,10-c));
             stageText+=`${s} ${bar} ${c}台\n`;
         });
+    }
+    // 未配置明细URL时，在正文中直接嵌入TOP 10超期明细
+    let detailText='';
+    const detailUrl=getDetailUrl();
+    if(!detailUrl && over.length){
+        const show=over.slice(0,10);
+        detailText='\n**超期车辆明细（TOP '+show.length+'/'+over.length+'台，按超期天数排序）**\n';
+        detailText+='| 等级 | 天数 | 车架号 | 车型 | 环节 |\n';
+        detailText+='|---|---:|---|---|---|\n';
+        show.forEach(v=>{
+            const lv=v._level==='P0'?'🔴P0':v._level==='P1'?'🟠P1':'🟡P2';
+            const vin=String(v['车架号']||'').slice(-8);
+            const model=String(v['车型']||'').replace(/\|/g,'/').slice(0,12);
+            const stage=String(v['当前环节']||'').replace(/\|/g,'/').slice(0,8);
+            detailText+=`|${lv}|${v['超期天数']}天|${vin}|${model}|${stage}|\n`;
+        });
+        if(over.length>10){
+            detailText+='\n> 另有'+(over.length-10)+'台详见完整清单，可在系统或群内回复「明细」获取\n';
+        }
     }
     const today=new Date().toLocaleDateString('zh-CN');
     return {
@@ -834,6 +877,7 @@ function buildCardPayload(name,g){
                     {is_short:true,text:{tag:'lark_md',content:`**总计超期**\n${over.length}台`}}
                 ]},
                 ...(stageText?[{tag:'div',text:{tag:'lark_md',content:'```text\n'+stageText+'```'}}]:[]),
+                ...(detailText?[{tag:'div',text:{tag:'lark_md',content:detailText}}]:[]),
                 {tag:'hr'},
                 {tag:'div',text:{tag:'lark_md',content:'> 💡 **处理要求**：P0严重超期车辆请优先处理，今日18:00前在系统中反馈处理进度。如遇无法解决的问题，请及时升级。'}},
                 {tag:'action',actions:buildCardActions(name,g.manager||'')}
@@ -847,18 +891,16 @@ function buildCardActions(storeName,managerName){
     const ackUrl=getAckUrl();
     if(detailUrl){
         const url=detailUrl.replace(/\{store\}/g,encodeURIComponent(storeName));
-        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看超期明细'},type:'primary',url:url});
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看完整明细'},type:'primary',url:url});
+    }else{
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 详见上方超期明细'},type:'primary'});
     }
     if(ackUrl){
         const aUrl=ackUrl.replace(/\{store\}/g,encodeURIComponent(storeName))
                         .replace(/\{manager\}/g,encodeURIComponent(managerName||''));
         actions.push({tag:'button',text:{tag:'plain_text',content:'✅ 已知悉并处理'},type:'default',url:aUrl});
-    }else{
-        // 不使用value回调（避免"尚未配置卡片交互功能"错误）
-        // 没有ACK URL时不发送按钮，或改为群内回复的提示（在卡片正文中提示即可）
     }
     if(actions.length===0){
-        // 防止空的action区块报错，返回一个提示说明按钮（不带跳转/回调）
         actions.push({tag:'button',text:{tag:'plain_text',content:'💡 请在群内回复确认'},type:'default'});
     }
     return actions;
