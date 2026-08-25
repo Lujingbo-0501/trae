@@ -705,7 +705,7 @@ function renderPreview(name,g){
     if(!hasDetailUrl && over.length){
         const show=over.slice(0,6);
         detailBlock=`<div style="margin-bottom:12px">
-            <div style="font-size:13px;font-weight:500;color:#333;margin-bottom:6px">📋 超期明细（TOP ${show.length}/${over.length}台）</div>
+            <div style="font-size:13px;font-weight:500;color:#333;margin-bottom:6px">📋 超期明细预览（显示TOP ${show.length} / 共${over.length}台 · 按超期天数排序）</div>
             <div style="font-size:12px;border:1px solid #e8eaed;border-radius:6px;overflow:hidden">
             <div style="background:#fafafa;display:grid;grid-template-columns:50px 55px 90px 1fr 100px;padding:6px 8px;font-weight:500;color:#646a73;border-bottom:1px solid #e8eaed">
                 <span>等级</span><span>天数</span><span>车架号</span><span>车型</span><span>当前环节</span>
@@ -717,11 +717,12 @@ function renderPreview(name,g){
                 <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v['车型']||''}</span>
                 <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v['当前环节']||''}</span>
             </div>`).join('')}
-            ${over.length>6?`<div style="padding:4px 8px;text-align:center;color:#8f959e;font-size:11px;background:#fafafa">还有${over.length-6}台 · 点击下方「查看完整明细」跳系统</div>`:''}
+            ${over.length>6?`<div style="padding:4px 8px;text-align:center;color:#8f959e;font-size:11px;background:#fafafa">还有${over.length-6}台 · 点击下方「📄下载全店明细CSV」</div>`:''}
             </div></div>`;
     }
     const buttons=[
-        `<button class="feishu-btn" onclick="scrollToDetail()">${hasDetailUrl?'📋 查看完整明细':'📋 详见上方明细 / 滚到底部看完整'}</button>`,
+        `<button class="feishu-btn" onclick="scrollToDetail()">${hasDetailUrl?'📋 查看完整明细':'📋 滚到底部看完整明细'}</button>`,
+        `<button class="feishu-btn secondary" onclick="exportCurrentStoreCSV('${name.replace(/'/g,"\\'")}')">📄 下载全店明细CSV</button>`,
         ackUrl?`<button class="feishu-btn secondary" onclick="markPreviewAck()">✅ 已知悉并处理</button>`:'<button class="feishu-btn secondary" onclick="markPreviewAck()">💡 群内回复确认</button>'
     ].join('');
     document.getElementById('previewArea').innerHTML=`<div class="feishu-card">
@@ -763,9 +764,11 @@ function markHandled(vin){alert('已标记 '+vin+' 为处理中\n真实场景下
 
 function getWebhook(){try{return localStorage.getItem('feishu_webhook')||'';}catch(e){return '';}}
 function getDetailUrl(){try{return localStorage.getItem('detail_url')||'';}catch(e){return '';}}
+function getDownloadUrl(){try{return localStorage.getItem('download_url')||'';}catch(e){return '';}}
 function getAckUrl(){try{return localStorage.getItem('ack_url')||'';}catch(e){return '';}}
 function setWebhook(url){try{localStorage.setItem('feishu_webhook',url);}catch(e){}updateWebhookStatus();}
 function setDetailUrl(url){try{localStorage.setItem('detail_url',url);}catch(e){}}
+function setDownloadUrl(url){try{localStorage.setItem('download_url',url);}catch(e){}}
 function setAckUrl(url){try{localStorage.setItem('ack_url',url);}catch(e){}}
 function updateWebhookStatus(){
     const wh=getWebhook();
@@ -777,28 +780,36 @@ function updateWebhookStatus(){
 function quickSetWebhook(){
     const wh=getWebhook();
     const du=getDetailUrl();
+    const dl=getDownloadUrl();
     const au=getAckUrl();
     const html=`<div style="text-align:left">
         <div style="margin-bottom:12px"><b>① 飞书机器人 Webhook （必填）</b><br>
         <span style="color:#888;font-size:12px">飞书群→群设置→群机器人→添加"自定义机器人"→复制Webhook</span><br>
         <input id="cfg_wh" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${wh}" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx"></div>
 
-        <div style="margin-bottom:12px"><b>② 明细页面 URL （可选）</b><br>
-        <span style="color:#888;font-size:12px">"查看超期明细"按钮跳转地址，支持占位符：<code>{store}</code>替换为门店名</span><br>
+        <div style="margin-bottom:12px"><b>② 完整明细页面 URL （可选）</b><br>
+        <span style="color:#888;font-size:12px">"查看完整明细"按钮跳转地址，支持占位符：<code>{store}</code>→门店名</span><br>
         <input id="cfg_du" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${du}" placeholder="https://your-system.com/overdue?store={store}"></div>
 
-        <div style="margin-bottom:8px"><b>③ 已知悉/确认 URL （可选）</b><br>
-        <span style="color:#888;font-size:12px">"已知悉"按钮跳转地址，支持占位符：<code>{store}</code>、<code>{manager}</code><br>
-        未配置则不显示此按钮，避免飞书"未配置卡片交互"错误，改由群内回复确认即可。</span><br>
+        <div style="margin-bottom:12px"><b>③ CSV下载 URL （可选）</b><br>
+        <span style="color:#888;font-size:12px">"下载全店明细CSV"按钮跳转地址。建议对接内部系统生成CSV直接下载。<br>
+        支持占位符：<code>{store}</code>、<code>{date}</code>（YYYY-MM-DD）<br>
+        ⚠️ 自定义机器人卡片按钮只能跳URL，不能直接浏览器下载。如果不配置，负责人可以在本系统页面点下载。</span><br>
+        <input id="cfg_dl" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${dl}" placeholder="https://your-system.com/overdue/download?store={store}&date={date}"></div>
+
+        <div style="margin-bottom:8px"><b>④ 已知悉/确认 URL （可选）</b><br>
+        <span style="color:#888;font-size:12px">支持占位符：<code>{store}</code>、<code>{manager}</code><br>
+        未配置则不显示此按钮，改由负责人在群内回复确认即可。</span><br>
         <input id="cfg_au" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${au}" placeholder="https://your-system.com/overdue/ack?store={store}&manager={manager}"></div>
     </div>`;
     const div=document.createElement('div');
     div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
-    div.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;width:500px;max-width:90vw;max-height:85vh;overflow-y:auto">
+    div.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;width:540px;max-width:90vw;max-height:85vh;overflow-y:auto">
         <h3 style="margin:0 0 12px 0;font-size:16px">⚙️ 飞书推送配置</h3>${html}
-        <div style="font-size:12px;color:#f54a45;background:#fef0f0;border-radius:6px;padding:6px 8px;margin:12px 0">
-            ⚠️ 注意：飞书自定义机器人卡片按钮<strong>只能做URL跳转</strong>，不能直接"点击确认"（会报"该应用尚未配置卡片交互功能"）。<br>
-            所以如果没配置确认URL，卡片底部会提示"请在群内回复确认"，由负责人在群里回复即可。
+        <div style="font-size:12px;color:#f54a45;background:#fef0f0;border-radius:6px;padding:6px 8px;margin:12px 0;line-height:1.5">
+            ⚠️ 飞书自定义机器人卡片按钮<strong>只能做URL跳转</strong>，不能直接下载文件或触发交互回调。<br>
+            所以未配置③下载URL时，虽然卡片有"📄下载CSV"按钮，但无法直接下载。<br>
+            解决方案：负责人打开本工具页面（在工具里选门店点下载即可），或在你们业务系统里做一个CSV下载页面，把URL填到③。
         </div>
         <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
             <button id="cfg_cancel" style="padding:6px 16px;border:1px solid #ddd;border-radius:6px;cursor:pointer;background:#fff">取消</button>
@@ -810,9 +821,10 @@ function quickSetWebhook(){
     div.querySelector('#cfg_save').onclick=()=>{
         setWebhook(div.querySelector('#cfg_wh').value.trim());
         setDetailUrl(div.querySelector('#cfg_du').value.trim());
+        setDownloadUrl(div.querySelector('#cfg_dl').value.trim());
         setAckUrl(div.querySelector('#cfg_au').value.trim());
         document.body.removeChild(div);
-        alert('✅ 配置已保存！\n\n未配置"已知悉URL"不会报错，负责人只需在群内回复确认即可。');
+        alert('✅ 配置已保存！\n\n卡片正文中默认嵌入TOP 10明细，底部会有"📄下载CSV"按钮。');
         if(currentStore){
             const g=storeGroups[currentStore];
             if(g)try{renderPreview(currentStore,g);}catch(e){}
@@ -823,8 +835,27 @@ function scrollToDetail(){
     const el=document.getElementById('detailTable');
     if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
 }
+function exportCurrentStoreCSV(storeName){
+    const name=storeName||currentStore;
+    if(!name||!storeGroups[name])return;
+    const vs=storeGroups[name].vehicles;
+    const headers=['门店','负责人','等级','超期天数','车架号','车型','当前环节','进入环节时间','是否超期','负责人飞书ID'];
+    let csv='\uFEFF'+headers.join(',')+'\n';
+    vs.sort((a,b)=>b['超期天数']-a['超期天数']).forEach(v=>{
+        const lv=v._level==='P0'?'P0严重':v._level==='P1'?'P1超期':v._level==='P2'?'P2预警':'正常';
+        const row=[name,v['负责人']||'',lv,v['超期天数']+'天',v['车架号']||'',v['车型']||'',v['当前环节']||'',v['进入环节时间']||'',v['是否超期']||'',v['负责人飞书ID']||''];
+        csv += row.map(c=>{
+            const s=String(c).replace(/"/g,'""').replace(/\n/g,' ');
+            return /[,"\n]/.test(s)?'"'+s+'"':s;
+        }).join(',')+'\n';
+    });
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`超期明细_${name}_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
 function markPreviewAck(){
-    alert('✅ 预览模式：此按钮在真实飞书卡片中会回传"已知悉"事件，可对接系统记录确认状态。');
+    alert('✅ 预览模式：此按钮在真实飞书卡片中会跳转到确认页面；若没配置确认URL，负责人在群内回复"已知悉"即可。');
 }
 
 function buildCardPayload(name,g){
@@ -839,12 +870,14 @@ function buildCardPayload(name,g){
             stageText+=`${s} ${bar} ${c}台\n`;
         });
     }
-    // 未配置明细URL时，在正文中直接嵌入TOP 10超期明细
+    // 在正文中直接嵌入TOP 10超期明细（不管是否有URL，默认都显示，方便一线直接看）
     let detailText='';
     const detailUrl=getDetailUrl();
-    if(!detailUrl && over.length){
-        const show=over.slice(0,10);
-        detailText='\n**超期车辆明细（TOP '+show.length+'/'+over.length+'台，按超期天数排序）**\n';
+    const downloadUrl=getDownloadUrl();
+    if(over.length){
+        const TOP=10;
+        const show=over.slice(0,TOP);
+        detailText='\n**超期车辆明细（显示TOP '+show.length+' / 共'+over.length+'台，按超期天数倒序）**\n';
         detailText+='| 等级 | 天数 | 车架号 | 车型 | 环节 |\n';
         detailText+='|---|---:|---|---|---|\n';
         show.forEach(v=>{
@@ -854,9 +887,12 @@ function buildCardPayload(name,g){
             const stage=String(v['当前环节']||'').replace(/\|/g,'/').slice(0,8);
             detailText+=`|${lv}|${v['超期天数']}天|${vin}|${model}|${stage}|\n`;
         });
-        if(over.length>10){
-            detailText+='\n> 另有'+(over.length-10)+'台详见完整清单，可在系统或群内回复「明细」获取\n';
+        if(over.length>TOP){
+            detailText+='\n> 🔺 还有'+(over.length-TOP)+'台未显示，点击下方「📄 下载全店明细CSV」或「📋 查看完整明细」获取全部';
+        }else{
+            detailText+='\n> 以上为全部超期车辆，如需下载请点击下方「📄 下载全店明细CSV」';
         }
+        detailText+='\n';
     }
     const today=new Date().toLocaleDateString('zh-CN');
     return {
@@ -888,18 +924,29 @@ function buildCardPayload(name,g){
 function buildCardActions(storeName,managerName){
     const actions=[];
     const detailUrl=getDetailUrl();
+    const downloadUrl=getDownloadUrl();
     const ackUrl=getAckUrl();
+    const today=new Date().toISOString().slice(0,10);
+    // 1. 下载按钮：永远放第一个
+    if(downloadUrl){
+        const dl=downloadUrl.replace(/\{store\}/g,encodeURIComponent(storeName)).replace(/\{date\}/g,today);
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📄 下载全店明细CSV'},type:'primary',url:dl});
+    }else{
+        // 没配置下载URL，显示一个纯文案按钮（无跳转，避免报错），提示在群内要/或打开本工具下载
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📄 全店CSV请在工具页面下载'},type:'primary'});
+    }
+    // 2. 查看完整明细
     if(detailUrl){
         const url=detailUrl.replace(/\{store\}/g,encodeURIComponent(storeName));
-        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看完整明细'},type:'primary',url:url});
-    }else{
-        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 详见上方超期明细'},type:'primary'});
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看完整明细'},type:'default',url:url});
     }
+    // 3. 已知悉/确认
     if(ackUrl){
         const aUrl=ackUrl.replace(/\{store\}/g,encodeURIComponent(storeName))
                         .replace(/\{manager\}/g,encodeURIComponent(managerName||''));
         actions.push({tag:'button',text:{tag:'plain_text',content:'✅ 已知悉并处理'},type:'default',url:aUrl});
     }
+    // 保证至少1个按钮
     if(actions.length===0){
         actions.push({tag:'button',text:{tag:'plain_text',content:'💡 请在群内回复确认'},type:'default'});
     }
