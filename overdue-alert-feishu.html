@@ -12,197 +12,388 @@
         .feishu-card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); max-width:520px; font-size:14px; }
         .feishu-header { background:linear-gradient(90deg,#3370ff 0%,#4e83fd 100%); color:#fff; padding:14px 16px; border-radius:12px 12px 0 0; }
         .feishu-body { padding:16px; }
-        .feishu-btn { display:inline-block; padding:6px 16px; background:#3370ff; color:#fff; border-radius:6px; text-decoration:none; font-size:13px; margin:4px 4px 4px 0; cursor:pointer; border:none; }
+        .feishu-btn { display:inline-block; padding:6px 16px; background:#3370ff; color:#fff; border-radius:6px; font-size:13px; margin:4px 4px 4px 0; cursor:pointer; border:none; }
         .feishu-btn.secondary { background:#f0f3f9; color:#3370ff; }
         .tag-red { background:#fef0f0; color:#f54a45; padding:2px 8px; border-radius:4px; font-size:12px; }
         .tag-orange { background:#fff3e0; color:#ff7d00; padding:2px 8px; border-radius:4px; font-size:12px; }
         .tag-yellow { background:#fffbe6; color:#faad14; padding:2px 8px; border-radius:4px; font-size:12px; }
+        .tag-green { background:#f6ffed; color:#52c41a; padding:2px 8px; border-radius:4px; font-size:12px; }
         .store-row { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid #e8eaed; border-radius:8px; margin-bottom:8px; transition:all 0.2s; cursor:pointer; }
         .store-row:hover { border-color:#3370ff; background:#f7f9fc; }
         .store-row.pushed { opacity:0.6; border-color:#52c41a; background:#f6ffed; }
-        .upload-zone { border:2px dashed #d0d5dd; border-radius:12px; padding:32px; text-align:center; transition:all 0.2s; cursor:pointer; }
-        .upload-zone:hover, .upload-zone.dragover { border-color:#3370ff; background:#f0f5ff; }
-        .pulse-red { animation: pulseRed 2s infinite; }
-        @keyframes pulseRed { 0%,100%{box-shadow:0 0 0 0 rgba(245,74,69,0.4)} 50%{box-shadow:0 0 0 6px rgba(245,74,69,0)} }
-        table th { background:#fafafa; font-weight:500; font-size:12px; color:#646a73; }
-        table td, table th { padding:8px 12px; border-bottom:1px solid #f0f0f0; text-align:left; font-size:13px; }
-        .stat-num { font-size:28px; font-weight:700; }
+        .data-source-card { border:2px solid #e8eaed; border-radius:12px; padding:20px; cursor:pointer; transition:all 0.2s; }
+        .data-source-card:hover { border-color:#3370ff; }
+        .data-source-card.active { border-color:#3370ff; background:#f0f5ff; }
+        .code-editor { font-family:'SF Mono',Monaco,Consolas,monospace; font-size:12px; background:#1e1e1e; color:#d4d4d4; padding:14px; border-radius:8px; line-height:1.6; overflow-x:auto; min-height:160px; resize:vertical; }
+        .sql-keyword { color:#569cd6; } .sql-string { color:#ce9178; } .sql-comment { color:#6a9955; } .sql-func { color:#dcdcaa; }
         .progress-bar { height:6px; border-radius:3px; background:#f0f0f0; overflow:hidden; }
         .progress-fill { height:100%; border-radius:3px; transition:width 0.5s; }
+        .stat-num { font-size:28px; font-weight:700; }
+        table th { background:#fafafa; font-weight:500; font-size:12px; color:#646a73; }
+        table td, table th { padding:8px 12px; border-bottom:1px solid #f0f0f0; text-align:left; font-size:13px; }
+        .pulse-dot { animation:pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         ::-webkit-scrollbar { width:6px; height:6px; } ::-webkit-scrollbar-thumb { background:#d0d5dd; border-radius:3px; }
+        .config-section { border-bottom:1px solid #f0f0f0; padding-bottom:16px; margin-bottom:16px; }
+        .field-map-row { display:grid; grid-template-columns:1fr 40px 1fr; gap:8px; align-items:center; margin-bottom:6px; }
+        .field-map-arrow { text-align:center; color:#999; }
     </style>
 </head>
 <body class="min-h-screen">
 
-<div class="max-w-[1400px] mx-auto p-6">
-    <header class="mb-5 flex items-center justify-between">
+<div class="max-w-[1440px] mx-auto p-6">
+    <header class="mb-5 flex items-center justify-between flex-wrap gap-3">
         <div>
             <h1 class="text-xl font-bold text-gray-800 flex items-center gap-2">
                 <span>🚨</span>超期车辆预警 · 飞书每日推送
             </h1>
-            <p class="text-sm text-gray-500 mt-1">每日盘点 → 按门店汇总 → 推送飞书卡片给负责人 → 查看明细处理闭环</p>
+            <p class="text-sm text-gray-500 mt-1">数据源对接Hive/风神 → 每日盘点 → 按门店汇总 → 推送飞书卡片给负责人</p>
         </div>
         <div class="flex gap-2">
-            <button onclick="downloadTemplate()" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">📄 下载导入模板</button>
-            <button onclick="loadSample()" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">🎲 加载示例数据</button>
-            <button onclick="showConfig()" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">⚙️ 推送配置</button>
+            <button onclick="showDataSourceConfig()" id="dsBtn" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-green-500 pulse-dot" id="dsStatus"></span>
+                <span id="dsLabel">数据源：未配置</span>
+            </button>
+            <button onclick="refreshData()" class="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">🔄 刷新数据</button>
+            <button onclick="loadSample()" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">🎲 加载示例</button>
+            <button onclick="showScheduleConfig()" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">⏰ 定时推送</button>
         </div>
     </header>
 
-    <div class="grid grid-cols-12 gap-5">
-        <div class="col-span-5 space-y-4">
-            <div class="bg-white rounded-xl p-5 shadow-sm">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="font-semibold text-gray-800">📥 数据导入</h2>
-                    <span class="text-xs text-gray-400">支持 .xlsx / .csv</span>
+    <div class="bg-white rounded-xl shadow-sm p-5 mb-5">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-gray-800">📡 数据源配置</h2>
+            <div class="text-xs text-gray-400">支持Hive直连 / 风神数据集API / Excel导入兜底</div>
+        </div>
+        <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="data-source-card active" id="dsType-hive" onclick="selectDsType('hive')">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-xl">🐝</div>
+                    <div>
+                        <div class="font-medium text-gray-800">Hive 数仓直连</div>
+                        <div class="text-xs text-gray-500">通过API服务执行SQL查询</div>
+                    </div>
                 </div>
-                <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-                    <div class="text-4xl mb-2">📊</div>
-                    <div class="text-gray-600 text-sm mb-1">点击或拖拽文件到此处上传</div>
-                    <div class="text-xs text-gray-400">需包含字段：车架号、车型、门店、负责人、当前环节、是否超期、超期天数</div>
-                    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFile(event)">
-                </div>
-                <div id="dataInfo" class="hidden mt-3 p-3 bg-green-50 rounded-lg border border-green-200 text-sm text-green-700">
-                    ✅ 已加载数据：<b id="rowCount">0</b>条，涉及<b id="storeCount">0</b>家门店
-                </div>
+                <div class="text-xs text-green-600">✅ 推荐 · 每日自动取数</div>
             </div>
-
-            <div class="bg-white rounded-xl p-5 shadow-sm">
-                <h2 class="font-semibold text-gray-800 mb-4">📊 今日汇总</h2>
-                <div class="grid grid-cols-3 gap-3 mb-4">
-                    <div class="p-3 bg-red-50 rounded-lg text-center">
-                        <div class="stat-num text-red-500" id="totalOverdue">0</div>
-                        <div class="text-xs text-gray-500 mt-1">超期车辆总数</div>
-                    </div>
-                    <div class="p-3 bg-orange-50 rounded-lg text-center">
-                        <div class="stat-num text-orange-500" id="storeOverdueCount">0</div>
-                        <div class="text-xs text-gray-500 mt-1">涉及门店</div>
-                    </div>
-                    <div class="p-3 bg-blue-50 rounded-lg text-center">
-                        <div class="stat-num text-blue-500" id="avgDelayDays">0</div>
-                        <div class="text-xs text-gray-500 mt-1">平均超期(天)</div>
+            <div class="data-source-card" id="dsType-fengshen" onclick="selectDsType('fengshen')">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center text-xl">🌪️</div>
+                    <div>
+                        <div class="font-medium text-gray-800">风神数据集</div>
+                        <div class="text-xs text-gray-500">对接字节风神BI数据集API</div>
                     </div>
                 </div>
-                <div class="text-sm text-gray-600 mb-2">按超期等级分布</div>
-                <div class="space-y-2">
-                    <div class="flex items-center gap-3">
-                        <span class="tag-red w-20 text-center">严重P0</span>
-                        <div class="flex-1 progress-bar"><div class="progress-fill bg-red-500" id="p0Bar" style="width:0%"></div></div>
-                        <span class="text-sm w-12 text-right" id="p0Count">0台</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="tag-orange w-20 text-center">超期P1</span>
-                        <div class="flex-1 progress-bar"><div class="progress-fill bg-orange-500" id="p1Bar" style="width:0%"></div></div>
-                        <span class="text-sm w-12 text-right" id="p1Count">0台</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="tag-yellow w-20 text-center">预警P2</span>
-                        <div class="flex-1 progress-bar"><div class="progress-fill bg-yellow-500" id="p2Bar" style="width:0%"></div></div>
-                        <span class="text-sm w-12 text-right" id="p2Count">0台</span>
-                    </div>
-                </div>
-                <div class="mt-4 pt-3 border-t border-gray-100">
-                    <div class="text-xs text-gray-500 mb-2">超期标准（MVP版本全局统一，后续支持分门店动态配置）</div>
-                    <div class="flex gap-3 text-xs text-gray-600">
-                        <span>P0: 超期≥3天</span><span>P1: 超期≥1天</span><span>P2: 即将到期</span>
-                    </div>
-                </div>
+                <div class="text-xs text-blue-600">🔌 对接内部BI平台</div>
             </div>
-
-            <div class="bg-white rounded-xl p-5 shadow-sm">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="font-semibold text-gray-800">🏪 门店推送清单</h2>
-                    <div class="flex gap-2">
-                        <button onclick="pushAll()" id="pushAllBtn" class="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 disabled:opacity-50" disabled>🚀 一键全部推送</button>
-                        <button onclick="exportAllDetails()" class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">📥 导出全量明细</button>
+            <div class="data-source-card" id="dsType-excel" onclick="selectDsType('excel')">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-xl">📊</div>
+                    <div>
+                        <div class="font-medium text-gray-800">Excel/CSV导入</div>
+                        <div class="text-xs text-gray-500">手动上传文件（兜底方案）</div>
                     </div>
                 </div>
-                <div id="storeList" class="max-h-[480px] overflow-y-auto">
-                    <div class="text-center text-gray-400 py-8 text-sm">请先导入数据或加载示例</div>
-                </div>
+                <div class="text-xs text-gray-500">📎 临时/测试用</div>
             </div>
         </div>
 
-        <div class="col-span-7 space-y-4">
-            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                <div class="p-5 border-b border-gray-100 flex items-center justify-between">
-                    <h2 class="font-semibold text-gray-800">💬 飞书卡片预览</h2>
-                    <div class="flex gap-2 text-xs text-gray-400">
-                        <span>推送给：<b id="previewReceiver" class="text-gray-700">--</b></span>
-                        <span id="previewStatus" class="px-2 py-0.5 bg-gray-100 rounded text-gray-500">预览中</span>
+        <div id="dsConfig-hive" class="ds-config">
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Hive查询API地址</label>
+                    <input type="text" id="hiveApiUrl" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="http://data-api.bytedance.net/hive/query" value="http://data-api.internal/hive/query">
+                    <div class="text-xs text-gray-400 mt-1">后端提供的Hive查询代理API（解决浏览器跨域+认证）</div>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">认证Token</label>
+                    <input type="password" id="hiveToken" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Bearer xxx 或 Cookie">
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm text-gray-600 mb-1">Hive SQL（每日执行）</label>
+                <textarea id="hiveSql" class="code-editor w-full" spellcheck="false">-- 超期车辆日报查询SQL
+-- 关联：车辆主表 + 环节流水表 + 门店负责人表
+SELECT
+    v.vin_code                                    AS vin,
+    v.car_model                                   AS model,
+    s.store_name                                  AS store,
+    u.user_name                                   AS owner,
+    u.feishu_open_id                              AS feishu_id,
+    curr.stage_name                               AS current_stage,
+    curr.stage_enter_time                         AS enter_time,
+    CASE WHEN curr.delay_hours > 0 THEN '是'
+         WHEN curr.delay_hours > -4 THEN '即将'
+         ELSE '否' END                            AS is_overdue,
+    ROUND(curr.delay_hours / 24, 1)              AS delay_days,
+    curr.delay_hours
+FROM
+    dwd_car_vehicle_info v
+-- 当前所在环节+超期时长
+LEFT JOIN (
+    SELECT
+        vin,
+        stage_name,
+        enter_time as stage_enter_time,
+        -- 超期小时数 = 当前时间 - 进入时间 - 该环节标准时效
+        (UNIX_TIMESTAMP() - UNIX_TIMESTAMP(enter_time))/3600
+        - CASE stage_name
+            WHEN '检测' THEN 8
+            WHEN '整备-钣金' THEN 12
+            WHEN '整备-喷漆' THEN 18
+            WHEN '整备-清洗' THEN 4
+            WHEN '定价' THEN 6
+            WHEN '过户' THEN 24
+            WHEN '物流-干线' THEN 72
+            WHEN '物流-同城' THEN 24
+            WHEN '门店交付准备' THEN 12
+            ELSE 24 END                          AS delay_hours
+    FROM dwd_car_stage_flow
+    WHERE dt = DATE_SUB(CURRENT_DATE, 1)
+      AND is_current = 1
+) curr ON v.vin_code = curr.vin
+-- 门店信息+负责人
+LEFT JOIN dim_store s ON v.store_id = s.store_id
+LEFT JOIN dim_store_user u ON s.store_id = u.store_id AND u.role = 'manager'
+WHERE
+    curr.delay_hours > -4  -- 即将到期+已超期
+    AND v.status IN ('在途','整备中','待交付')
+ORDER BY
+    curr.delay_hours DESC</textarea>
+                <div class="text-xs text-gray-400 mt-1">💡 SQL中可配置各环节标准时效（CASE语句中），后续支持从配置表读取</div>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm text-gray-600 mb-2">字段映射（SQL结果列名 → 系统字段）</label>
+                <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                    <div class="field-map-row">
+                        <span class="text-gray-500">车架号</span>
+                        <span class="field-map-arrow">→</span>
+                        <input type="text" class="border border-gray-200 rounded px-2 py-1 text-sm" value="vin">
                     </div>
-                </div>
-                <div class="bg-gray-100 p-6 flex justify-center" id="previewArea">
-                    <div class="text-center text-gray-400 py-16 text-sm">← 点击左侧门店查看推送效果</div>
-                </div>
-                <div class="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
-                    <div class="text-xs text-gray-500">📌 卡片包含：超期汇总、分级统计、各环节分布、「查看明细」「标记处理」按钮</div>
-                    <div class="flex gap-2">
-                        <button onclick="copyCardJson()" class="px-3 py-1.5 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📋 复制卡片JSON</button>
-                        <button onclick="simulatePush()" id="simulateBtn" class="px-4 py-1.5 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:opacity-50" disabled>📤 模拟发送</button>
+                    <div class="field-map-row">
+                        <span class="text-gray-500">车型</span>
+                        <span class="field-map-arrow">→</span>
+                        <input type="text" class="border border-gray-200 rounded px-2 py-1 text-sm" value="model">
+                    </div>
+                    <div class="field-map-row">
+                        <span class="text-gray-500">门店</span>
+                        <span class="field-map-arrow">→</span>
+                        <input type="text" class="border border-gray-200 rounded px-2 py-1 text-sm" value="store">
+                    </div>
+                    <div class="field-map-row">
+                        <span class="text-gray-500">负责人</span>
+                        <span class="field-map-arrow">→</span>
+                        <input type="text" class="border border-gray-200 rounded px-2 py-1 text-sm" value="owner">
+                    </div>
+                    <div class="field-map-row">
+                        <span class="text-gray-500">飞书OpenID</span>
+                        <span class="field-map-arrow">→</span>
+                        <input type="text" class="border border-gray-200 rounded px-2 py-1 text-sm" value="feishu_id">
+                    </div>
+                    <div class="field-map-row">
+                        <span class="text-gray-500">当前环节</span>
+                        <span class="field-map-arrow">→</span>
+                        <input type="text" class="border border-gray-200 rounded px-2 py-1 text-sm" value="current_stage">
+                    </div>
+                    <div class="field-map-row">
+                        <span class="text-gray-500">进入时间</span>
+                        <span class="field-map-arrow">→</span>
+                        <input type="text" class="border border-gray-200 rounded px-2 py-1 text-sm" value="enter_time">
+                    </div>
+                    <div class="field-map-row">
+                        <span class="text-gray-500">超期天数</span>
+                        <span class="field-map-arrow">→</span>
+                        <input type="text" class="border border-gray-200 rounded px-2 py-1 text-sm" value="delay_days">
                     </div>
                 </div>
             </div>
+            <div class="flex gap-2">
+                <button onclick="testHiveQuery()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">🔍 测试连接&查询</button>
+                <button onclick="saveDsConfig()" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">💾 保存配置</button>
+            </div>
+        </div>
 
-            <div class="bg-white rounded-xl p-5 shadow-sm">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="font-semibold text-gray-800">📋 超期明细（当前选中门店）</h2>
+        <div id="dsConfig-fengshen" class="ds-config hidden">
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">风神数据集ID</label>
+                    <input type="text" id="fsDatasetId" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="dataset_id">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">风神App ID / App Secret</label>
                     <div class="flex gap-2">
-                        <select id="filterStage" class="text-sm border border-gray-200 rounded px-2 py-1" onchange="renderDetailTable()">
-                            <option value="">全部环节</option>
-                        </select>
-                        <select id="filterLevel" class="text-sm border border-gray-200 rounded px-2 py-1" onchange="renderDetailTable()">
-                            <option value="">全部等级</option>
-                            <option value="P0">P0 严重</option>
-                            <option value="P1">P1 超期</option>
-                            <option value="P2">P2 预警</option>
-                        </select>
-                        <button onclick="exportCurrentStore()" class="px-3 py-1.5 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📥 导出该店明细</button>
+                        <input type="text" class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="App ID">
+                        <input type="password" class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="App Secret">
                     </div>
                 </div>
-                <div class="overflow-x-auto max-h-[360px] overflow-y-auto">
-                    <table class="w-full" id="detailTable">
-                        <thead><tr><th>车架号</th><th>车型</th><th>当前环节</th><th>负责人</th><th>超期天数</th><th>等级</th><th>状态</th></tr></thead>
-                        <tbody><tr><td colspan="7" class="text-center text-gray-400 py-8">请选择门店查看明细</td></tr></tbody>
-                    </table>
+            </div>
+            <div class="p-4 bg-purple-50 rounded-lg border border-purple-200 text-sm text-purple-700 mb-4">
+                💡 对接风神数据集需在风神开放平台创建应用，授权数据集读取权限。配置后可直接拉取风神已建好的超期车辆数据集，无需写SQL。
+            </div>
+            <button onclick="saveDsConfig()" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">💾 保存风神配置</button>
+        </div>
+
+        <div id="dsConfig-excel" class="ds-config hidden">
+            <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 hover:bg-blue-50 transition cursor-pointer" onclick="document.getElementById('fileInput').click()">
+                <div class="text-4xl mb-2">📊</div>
+                <div class="text-gray-600 text-sm mb-1">点击上传Excel/CSV文件</div>
+                <div class="text-xs text-gray-400">字段参考模板下载</div>
+                <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFile(event)">
+            </div>
+            <div class="flex gap-2 mt-3">
+                <button onclick="downloadTemplate()" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">📄 下载模板</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="noDataTip" class="bg-white rounded-xl shadow-sm p-12 text-center">
+        <div class="text-5xl mb-4">📡</div>
+        <div class="text-gray-600 mb-2">请先配置数据源并加载数据</div>
+        <div class="text-sm text-gray-400 mb-4">推荐使用Hive直连，配置好SQL后点击「测试连接&查询」即可拉取今日数据</div>
+        <button onclick="loadSample()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">🎲 先加载示例数据体验</button>
+    </div>
+
+    <div id="mainContent" class="hidden">
+        <div class="grid grid-cols-12 gap-5">
+            <div class="col-span-5 space-y-4">
+                <div class="bg-white rounded-xl p-5 shadow-sm">
+                    <h2 class="font-semibold text-gray-800 mb-4">📊 今日汇总 <span class="text-xs text-gray-400 font-normal ml-2" id="dataSourceTime"></span></h2>
+                    <div class="grid grid-cols-3 gap-3 mb-4">
+                        <div class="p-3 bg-red-50 rounded-lg text-center">
+                            <div class="stat-num text-red-500" id="totalOverdue">0</div>
+                            <div class="text-xs text-gray-500 mt-1">超期车辆总数</div>
+                        </div>
+                        <div class="p-3 bg-orange-50 rounded-lg text-center">
+                            <div class="stat-num text-orange-500" id="storeOverdueCount">0</div>
+                            <div class="text-xs text-gray-500 mt-1">涉及门店</div>
+                        </div>
+                        <div class="p-3 bg-blue-50 rounded-lg text-center">
+                            <div class="stat-num text-blue-500" id="avgDelayDays">0</div>
+                            <div class="text-xs text-gray-500 mt-1">平均超期(天)</div>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600 mb-2">按超期等级分布</div>
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-3">
+                            <span class="tag-red w-20 text-center">严重P0</span>
+                            <div class="flex-1 progress-bar"><div class="progress-fill bg-red-500" id="p0Bar" style="width:0%"></div></div>
+                            <span class="text-sm w-12 text-right" id="p0Count">0台</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="tag-orange w-20 text-center">超期P1</span>
+                            <div class="flex-1 progress-bar"><div class="progress-fill bg-orange-500" id="p1Bar" style="width:0%"></div></div>
+                            <span class="text-sm w-12 text-right" id="p1Count">0台</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="tag-yellow w-20 text-center">预警P2</span>
+                            <div class="flex-1 progress-bar"><div class="progress-fill bg-yellow-500" id="p2Bar" style="width:0%"></div></div>
+                            <span class="text-sm w-12 text-right" id="p2Count">0台</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-500">
+                        <div class="flex justify-between">
+                            <span>超期标准（可配置）：</span>
+                            <span>P0≥3天 · P1≥1天 · P2即将到期</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl p-5 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-semibold text-gray-800">🏪 门店推送清单</h2>
+                        <div class="flex gap-2">
+                            <button onclick="pushAll()" id="pushAllBtn" class="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 disabled:opacity-50" disabled>🚀 一键全部推送</button>
+                            <button onclick="exportAllDetails()" class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">📥 导出明细</button>
+                        </div>
+                    </div>
+                    <div id="storeList" class="max-h-[480px] overflow-y-auto"></div>
                 </div>
             </div>
 
-            <div class="bg-white rounded-xl p-5 shadow-sm">
-                <h2 class="font-semibold text-gray-800 mb-3">📜 推送历史</h2>
-                <div id="pushHistory" class="space-y-2 text-sm">
-                    <div class="text-center text-gray-400 py-4 text-xs">暂无推送记录</div>
+            <div class="col-span-7 space-y-4">
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+                        <h2 class="font-semibold text-gray-800">💬 飞书卡片预览</h2>
+                        <div class="flex gap-2 text-xs text-gray-400 items-center">
+                            <span>推送给：<b id="previewReceiver" class="text-gray-700">--</b></span>
+                            <span id="previewStatus" class="px-2 py-0.5 bg-gray-100 rounded text-gray-500">未选中</span>
+                        </div>
+                    </div>
+                    <div class="bg-gray-100 p-6 flex justify-center" id="previewArea">
+                        <div class="text-center text-gray-400 py-16 text-sm">← 点击左侧门店查看推送效果</div>
+                    </div>
+                    <div class="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+                        <div class="text-xs text-gray-500">📌 卡片将通过飞书机器人推送到门店负责人（@feishu_open_id）</div>
+                        <div class="flex gap-2">
+                            <button onclick="copyCardJson()" class="px-3 py-1.5 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📋 复制卡片JSON</button>
+                            <button onclick="simulatePush()" id="simulateBtn" class="px-4 py-1.5 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:opacity-50" disabled>📤 发送飞书</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl p-5 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-semibold text-gray-800">📋 超期明细</h2>
+                        <div class="flex gap-2">
+                            <select id="filterStage" class="text-sm border border-gray-200 rounded px-2 py-1" onchange="renderDetailTable()"><option value="">全部环节</option></select>
+                            <select id="filterLevel" class="text-sm border border-gray-200 rounded px-2 py-1" onchange="renderDetailTable()">
+                                <option value="">全部等级</option><option value="P0">P0 严重</option><option value="P1">P1 超期</option><option value="P2">P2 预警</option>
+                            </select>
+                            <button onclick="exportCurrentStore()" class="px-3 py-1.5 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📥 导出</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto max-h-[360px] overflow-y-auto">
+                        <table class="w-full" id="detailTable">
+                            <thead><tr><th>车架号</th><th>车型</th><th>当前环节</th><th>负责人</th><th>超期天数</th><th>等级</th><th>操作</th></tr></thead>
+                            <tbody><tr><td colspan="7" class="text-center text-gray-400 py-8">请选择门店查看明细</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl p-5 shadow-sm">
+                    <h2 class="font-semibold text-gray-800 mb-3">📜 推送历史</h2>
+                    <div id="pushHistory" class="space-y-2 text-sm"><div class="text-center text-gray-400 py-4 text-xs">暂无推送记录</div></div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<div id="configModal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center">
-    <div class="bg-white rounded-xl w-[480px] p-6">
-        <h3 class="font-semibold text-lg mb-4">⚙️ 推送配置（预留）</h3>
+<div id="scheduleModal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center">
+    <div class="bg-white rounded-xl w-[520px] p-6">
+        <h3 class="font-semibold text-lg mb-4">⏰ 定时推送配置</h3>
         <div class="space-y-4 text-sm">
-            <div>
-                <label class="block text-gray-600 mb-1">飞书机器人 Webhook</label>
-                <input type="text" id="webhookUrl" class="w-full border border-gray-200 rounded px-3 py-2" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx" value="https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxx（示例）">
-                <div class="text-xs text-gray-400 mt-1">真实接入时填入，MVP阶段先模拟发送</div>
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                    <div class="font-medium">启用每日定时推送</div>
+                    <div class="text-xs text-gray-500">开启后每日自动从Hive拉取数据并推送</div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="scheduleEnabled" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition peer-checked:after:translate-x-5"></div>
+                </label>
             </div>
             <div>
                 <label class="block text-gray-600 mb-1">推送时间</label>
-                <input type="time" class="w-full border border-gray-200 rounded px-3 py-2" value="09:00">
+                <input type="time" id="scheduleTime" class="w-full border border-gray-200 rounded-lg px-3 py-2" value="09:00">
+                <div class="text-xs text-gray-400 mt-1">建议工作日早9点推送，负责人上班后第一时间看到</div>
             </div>
             <div>
-                <label class="block text-gray-600 mb-2">超期分级阈值</label>
-                <div class="grid grid-cols-3 gap-2">
-                    <div><div class="text-xs text-red-500 mb-1">P0 严重</div><input type="number" class="w-full border border-gray-200 rounded px-2 py-1" value="3" min="1"> <span class="text-xs text-gray-400">天以上</span></div>
-                    <div><div class="text-xs text-orange-500 mb-1">P1 超期</div><input type="number" class="w-full border border-gray-200 rounded px-2 py-1" value="1" min="0"> <span class="text-xs text-gray-400">天以上</span></div>
-                    <div><div class="text-xs text-yellow-500 mb-1">P2 预警</div><input type="number" class="w-full border border-gray-200 rounded px-2 py-1" value="0" min="0"> <span class="text-xs text-gray-400">天以上</span></div>
+                <label class="block text-gray-600 mb-1">推送方式</label>
+                <div class="space-y-2">
+                    <label class="flex items-center gap-2"><input type="checkbox" checked> 飞书机器人消息卡片（按门店推给对应负责人）</label>
+                    <label class="flex items-center gap-2"><input type="checkbox"> 邮件抄送区域经理</label>
+                    <label class="flex items-center gap-2"><input type="checkbox"> P0严重超期同时@负责人+直属主管</label>
                 </div>
-                <div class="text-xs text-blue-500 mt-2">💡 后续版本：支持不同门店/环节单独配置阈值</div>
+            </div>
+            <div>
+                <label class="block text-gray-600 mb-1">飞书机器人Webhook</label>
+                <input type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-xs" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx" id="feishuWebhook">
+                <div class="text-xs text-gray-400 mt-1">在飞书群设置→群机器人→添加自定义机器人 获取Webhook</div>
             </div>
             <div class="pt-2 flex gap-2 justify-end">
-                <button onclick="hideConfig()" class="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">取消</button>
-                <button onclick="saveConfig()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存配置</button>
+                <button onclick="hideScheduleConfig()" class="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">取消</button>
+                <button onclick="saveSchedule()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存并启用</button>
             </div>
         </div>
     </div>
@@ -214,18 +405,74 @@ let storeGroups = {};
 let currentStore = null;
 let pushedStores = new Set();
 let pushHistory = [];
+let currentDsType = 'hive';
 let thresholds = { P0:3, P1:1, P2:0 };
+let dsConfig = { type:'hive', configured:false };
 
-document.addEventListener('DOMContentLoaded', () => {
-    const zone = document.getElementById('uploadZone');
-    zone.addEventListener('dragover', e=>{e.preventDefault();zone.classList.add('dragover');});
-    zone.addEventListener('dragleave', ()=>zone.classList.remove('dragover'));
-    zone.addEventListener('drop', e=>{e.preventDefault();zone.classList.remove('dragover');if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);});
-});
+function selectDsType(type){
+    currentDsType = type;
+    document.querySelectorAll('.data-source-card').forEach(el=>el.classList.remove('active'));
+    document.getElementById('dsType-'+type).classList.add('active');
+    document.querySelectorAll('.ds-config').forEach(el=>el.classList.add('hidden'));
+    document.getElementById('dsConfig-'+type).classList.remove('hidden');
+}
+
+function showDataSourceConfig(){ /* scroll to config */ window.scrollTo({top:0,behavior:'smooth'}); }
+function showScheduleConfig(){document.getElementById('scheduleModal').classList.remove('hidden');document.getElementById('scheduleModal').classList.add('flex');}
+function hideScheduleConfig(){document.getElementById('scheduleModal').classList.add('hidden');document.getElementById('scheduleModal').classList.remove('flex');}
+
+function saveDsConfig(){
+    dsConfig.configured = true;
+    dsConfig.type = currentDsType;
+    document.getElementById('dsLabel').textContent = '数据源：' + {hive:'Hive直连',fengshen:'风神数据集',excel:'Excel导入'}[currentDsType];
+    document.getElementById('dsStatus').className = 'w-2 h-2 rounded-full bg-green-500';
+    alert('数据源配置已保存！\n\n注意：当前是前端演示版本，真实Hive查询需要一个后端API服务（Python/Node）做中转，原因：\n1. 浏览器无法直连Hive（需要JDBC/Thrift协议+Kerberos认证）\n2. 跨域限制\n3. 认证Token不能暴露在前端\n\n后端参考实现：用Python FastAPI + PyHive/Impala，提供一个POST /hive/query接口，接收SQL返回JSON即可。');
+}
+
+async function testHiveQuery(){
+    const apiUrl = document.getElementById('hiveApiUrl').value;
+    const sql = document.getElementById('hiveSql').value;
+    if(!apiUrl){alert('请填写Hive API地址');return;}
+
+    const btn=event.target;
+    btn.disabled=true;btn.textContent='查询中...';
+    try{
+        /* 真实场景：
+        const resp = await fetch(apiUrl, {
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':document.getElementById('hiveToken').value},
+            body:JSON.stringify({sql:sql})
+        });
+        const json = await resp.json();
+        rawData = json.data.map(r => ({
+            '车架号':r.vin,'车型':r.model,'门店':r.store,'负责人':r.owner,
+            '负责人飞书ID':r.feishu_id,'当前环节':r.current_stage,
+            '进入环节时间':r.enter_time,'是否超期':r.is_overdue,'超期天数':Number(r.delay_days)
+        }));
+        */
+        alert('演示版本无法直连Hive，已加载示例数据代替。\n\n真实接入时：\n1. 后端部署Hive查询API（Python FastAPI示例可提供）\n2. 填入API地址和Token\n3. SQL写好后，此按钮会真实执行查询并填充数据');
+        loadSample();
+        saveDsConfig();
+    }catch(e){
+        alert('查询失败：'+e.message+'\n\n如API未部署，可先点"加载示例"体验流程');
+    }
+    btn.disabled=false;btn.textContent='🔍 测试连接&查询';
+}
+
+function refreshData(){
+    if(dsConfig.type==='hive'&&dsConfig.configured) testHiveQuery();
+    else if(dsConfig.type==='excel') alert('Excel模式请重新上传文件');
+    else alert('请先配置数据源');
+}
+
+function saveSchedule(){
+    hideScheduleConfig();
+    alert('定时推送配置已保存！\n\n真实部署后，需要：\n1. 后端定时任务（如APScheduler/crontab）每日9:00触发\n2. 调用飞书开放API发送消息（支持@指定open_id）\n3. 推送结果记录日志\n\n前端演示中可手动点击"一键全部推送"体验。');
+}
 
 function downloadTemplate(){
-    const data=[['车架号','车型','门店','负责人','负责人飞书ID','当前环节','进入环节时间','是否超期','超期天数'],['LFV2A21K0D3000001','大众朗逸 2023','朝阳店','张经理','ou_xxx123','整备-喷漆','2025-08-22 10:00','是',4],['LSVUU6888N2000002','宝马3系 2022','海淀店','李主管','ou_xxx456','检测','2025-08-24 09:00','是',2]];
-    XLSX.writeFile(XLSX.utils.book_append_sheet(XLSX.utils.book_new(),XLSX.utils.aoa_to_sheet(data),'超期车辆模板'),'超期车辆导入模板.xlsx');
+    const data=[['车架号','车型','门店','负责人','负责人飞书ID','当前环节','进入环节时间','是否超期','超期天数'],['LFV2A21K0D3000001','大众朗逸 2023','朝阳店','张经理','ou_xxx123','整备-喷漆','2025-08-22 10:00','是',4]];
+    XLSX.writeFile(XLSX.utils.book_append_sheet(XLSX.utils.book_new(),XLSX.utils.aoa_to_sheet(data),'模板'),'超期车辆导入模板.xlsx');
 }
 
 function loadSample(){
@@ -240,34 +487,34 @@ function loadSample(){
         for(let i=0;i<n;i++){
             const delay=Math.random()<0.2?(3+Math.floor(Math.random()*5)):Math.random()<0.6?(1+Math.floor(Math.random()*2)):(Math.floor(Math.random()*10)/10);
             const stage=stages[Math.floor(Math.random()*stages.length)];
+            const enterDate=new Date(Date.now()-delay*86400000-Math.random()*43200000);
             rows.push({
-                车架号:'L'+Math.random().toString(36).substring(2,10).toUpperCase(),
-                车型:models[Math.floor(Math.random()*models.length)],
-                门店:store,负责人:managers[si],'负责人飞书ID':feishuIds[si],
-                当前环节:stage,进入环节时间:new Date(Date.now()-delay*86400000-Math.random()*43200000).toLocaleString('zh-CN',{hour12:false}),
-                是否超期:delay>=1?'是':(delay>0?'即将':'否'),
-                超期天数:Number(delay.toFixed(1))
+                '车架号':'L'+Math.random().toString(36).substring(2,10).toUpperCase(),
+                '车型':models[Math.floor(Math.random()*models.length)],
+                '门店':store,'负责人':managers[si],'负责人飞书ID':feishuIds[si],
+                '当前环节':stage,'进入环节时间':enterDate.toLocaleString('zh-CN',{hour12:false}),
+                '是否超期':delay>=1?'是':delay>0?'即将':'否','超期天数':Number(delay.toFixed(1))
             });
         }
     });
     rawData=rows;
+    dsConfig.configured=true;dsConfig.type='sample';
+    document.getElementById('dsLabel').textContent='数据源：示例数据';
+    document.getElementById('dsStatus').className='w-2 h-2 rounded-full bg-yellow-500 pulse-dot';
     processData();
 }
 
-function handleFile(e){ if(e.target.files[0])processFile(e.target.files[0]); }
-function processFile(file){
-    const reader=new FileReader();
-    reader.onload=e=>{
-        try{
-            const wb=XLSX.read(e.target.result,{type:'array'});
-            const ws=wb.Sheets[wb.SheetNames[0]];
-            const json=XLSX.utils.sheet_to_json(ws,{defval:''});
-            rawData=json.map(r=>({...r,超期天数:Number(r['超期天数']||0),是否超期:r['是否超期']||''})).filter(r=>r['车架号']||r.车架号);
-            processData();
-        }catch(err){alert('文件解析失败：'+err.message);}
-    };
-    reader.readAsArrayBuffer(file);
-}
+function handleFile(e){ if(e.target.files[0]){
+    const f=e.target.files[0];const r=new FileReader();
+    r.onload=ev=>{try{const wb=XLSX.read(ev.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];const j=XLSX.utils.sheet_to_json(ws,{defval:''});
+        rawData=j.map(r=>({...r,'超期天数':Number(r['超期天数']||0)})).filter(r=>r['车架号']);
+        dsConfig.configured=true;dsConfig.type='excel';
+        document.getElementById('dsLabel').textContent='数据源：Excel - '+f.name;
+        document.getElementById('dsStatus').className='w-2 h-2 rounded-full bg-green-500';
+        processData();
+    }catch(err){alert('解析失败：'+err.message);}};
+    r.readAsArrayBuffer(f);
+}}
 
 function getLevel(days){
     if(days>=thresholds.P0)return'P0';
@@ -279,231 +526,153 @@ function levelTag(lv){
     if(lv==='P0')return'<span class="tag-red">严重P0</span>';
     if(lv==='P1')return'<span class="tag-orange">超期P1</span>';
     if(lv==='P2')return'<span class="tag-yellow">预警P2</span>';
-    return '<span class="text-green-500 text-xs">正常</span>';
+    return '<span class="tag-green">正常</span>';
 }
 
 function processData(){
+    document.getElementById('noDataTip').classList.add('hidden');
+    document.getElementById('mainContent').classList.remove('hidden');
+    document.getElementById('dataSourceTime').textContent='· 数据更新于 '+new Date().toLocaleTimeString('zh-CN',{hour12:false});
     storeGroups={};
     rawData.forEach(r=>{
-        const s=r['门店']||r.门店||'未知门店';
-        if(!storeGroups[s])storeGroups[s]={manager:r['负责人']||r.负责人||'未指定',feishuId:r['负责人飞书ID']||r['负责人飞书id']||'',vehicles:[]};
+        const s=r['门店']||'未知门店';
+        if(!storeGroups[s])storeGroups[s]={manager:r['负责人']||'未指定',feishuId:r['负责人飞书ID']||'',vehicles:[]};
         r._level=getLevel(r['超期天数']||0);
         storeGroups[s].vehicles.push(r);
     });
     const overdue=rawData.filter(r=>r._level!=='normal');
-    document.getElementById('rowCount').textContent=rawData.length;
-    document.getElementById('storeCount').textContent=Object.keys(storeGroups).length;
     document.getElementById('totalOverdue').textContent=overdue.length;
     document.getElementById('storeOverdueCount').textContent=Object.values(storeGroups).filter(g=>g.vehicles.some(v=>v._level!=='normal')).length;
     document.getElementById('avgDelayDays').textContent=overdue.length?(overdue.reduce((a,b)=>a+(b['超期天数']||0),0)/overdue.length).toFixed(1):'0';
     const p0=overdue.filter(r=>r._level==='P0').length,p1=overdue.filter(r=>r._level==='P1').length,p2=overdue.filter(r=>r._level==='P2').length;
     const mx=Math.max(p0,p1,p2,1);
     document.getElementById('p0Count').textContent=p0+'台';document.getElementById('p1Count').textContent=p1+'台';document.getElementById('p2Count').textContent=p2+'台';
-    document.getElementById('p0Bar').style.width=(p0/mx*100)+'%';
-    document.getElementById('p1Bar').style.width=(p1/mx*100)+'%';
-    document.getElementById('p2Bar').style.width=(p2/mx*100)+'%';
-    document.getElementById('dataInfo').classList.remove('hidden');
+    document.getElementById('p0Bar').style.width=(p0/mx*100)+'%';document.getElementById('p1Bar').style.width=(p1/mx*100)+'%';document.getElementById('p2Bar').style.width=(p2/mx*100)+'%';
     document.getElementById('pushAllBtn').disabled=false;
     renderStoreList();
     const stageSet=new Set();
-    rawData.forEach(r=>{if(r['当前环节']||r.当前环节)stageSet.add(r['当前环节']||r.当前环节);});
-    const stageSel=document.getElementById('filterStage');
-    stageSel.innerHTML='<option value="">全部环节</option>'+[...stageSet].map(s=>`<option>${s}</option>`).join('');
+    rawData.forEach(r=>{if(r['当前环节'])stageSet.add(r['当前环节']);});
+    document.getElementById('filterStage').innerHTML='<option value="">全部环节</option>'+[...stageSet].map(s=>`<option>${s}</option>`).join('');
+    pushedStores.clear();renderHistory();
 }
 
 function renderStoreList(){
     const el=document.getElementById('storeList');
-    const entries=Object.entries(storeGroups).sort((a,b)=>{
-        const oa=a[1].vehicles.filter(v=>v._level!=='normal').length;
-        const ob=b[1].vehicles.filter(v=>v._level!=='normal').length;
-        return ob-oa;
-    });
+    const entries=Object.entries(storeGroups).sort((a,b)=>b[1].vehicles.filter(v=>v._level!=='normal').length-a[1].vehicles.filter(v=>v._level!=='normal').length);
     el.innerHTML=entries.map(([name,g])=>{
         const over=g.vehicles.filter(v=>v._level!=='normal');
         const p0=g.vehicles.filter(v=>v._level==='P0').length;
         const pushed=pushedStores.has(name);
         return `<div class="store-row ${pushed?'pushed':''}" onclick="selectStore('${name}')">
-            <div>
-                <div class="font-medium text-gray-800 text-sm">🏪 ${name}</div>
-                <div class="text-xs text-gray-500 mt-0.5">负责人：${g.manager} ${pushed?'<span class="text-green-600">· ✅ 已推送</span>':''}</div>
-            </div>
-            <div class="text-right">
-                <div class="flex gap-1 justify-end mb-1">
-                    ${p0>0?`<span class="tag-red">${p0}台P0</span>`:''}
-                    ${over.length-p0>0?`<span class="tag-orange">${over.length-p0}台</span>`:''}
-                </div>
-                <div class="text-xs text-gray-400">共${g.vehicles.length}台</div>
-            </div>
+            <div><div class="font-medium text-gray-800 text-sm">🏪 ${name}</div>
+            <div class="text-xs text-gray-500 mt-0.5">${g.manager} ${g.feishuId?'<span class="text-blue-500">@'+g.feishuId.substring(0,8)+'...</span>':''} ${pushed?'<span class="text-green-600">· ✅ 已推送</span>':''}</div></div>
+            <div class="text-right"><div class="flex gap-1 justify-end mb-1">
+                ${p0>0?`<span class="tag-red">${p0}台P0</span>`:''}
+                ${over.length-p0>0?`<span class="tag-orange">${over.length-p0}台</span>`:''}
+            </div><div class="text-xs text-gray-400">共${g.vehicles.length}台</div></div>
         </div>`;
-    }).join('') || '<div class="text-center text-gray-400 py-8 text-sm">暂无数据</div>';
+    }).join('')||'<div class="text-center text-gray-400 py-8 text-sm">暂无超期车辆 🎉</div>';
 }
 
 function selectStore(name){
-    currentStore=name;
-    const g=storeGroups[name];
+    currentStore=name;const g=storeGroups[name];
     document.getElementById('previewReceiver').textContent=name+' · '+g.manager;
-    document.getElementById('previewStatus').textContent='待推送';
-    document.getElementById('previewStatus').className='px-2 py-0.5 bg-orange-100 text-orange-600 rounded';
+    document.getElementById('previewStatus').textContent='待推送';document.getElementById('previewStatus').className='px-2 py-0.5 bg-orange-100 text-orange-600 rounded';
     document.getElementById('simulateBtn').disabled=false;
-    renderPreview(name,g);
-    renderDetailTable();
+    renderPreview(name,g);renderDetailTable();
 }
 
 function renderPreview(name,g){
     const over=g.vehicles.filter(v=>v._level!=='normal');
-    const p0=g.vehicles.filter(v=>v._level==='P0').length;
-    const p1=g.vehicles.filter(v=>v._level==='P1').length;
-    const p2=g.vehicles.filter(v=>v._level==='P2').length;
-    const stageMap={};
-    over.forEach(v=>{const s=v['当前环节']||v.当前环节||'未知';stageMap[s]=(stageMap[s]||0)+1;});
-    const maxStage=Math.max(...Object.values(stageMap),1);
+    const p0=g.vehicles.filter(v=>v._level==='P0').length,p1=g.vehicles.filter(v=>v._level==='P1').length,p2=g.vehicles.filter(v=>v._level==='P2').length;
+    const stageMap={};over.forEach(v=>{const s=v['当前环节']||'未知';stageMap[s]=(stageMap[s]||0)+1;});
+    const mx=Math.max(...Object.values(stageMap),1);
     const today=new Date().toLocaleDateString('zh-CN');
-    const card=`
-    <div class="feishu-card">
+    document.getElementById('previewArea').innerHTML=`<div class="feishu-card">
         <div class="feishu-header">
             <div class="font-semibold">🚨 ${name} · 超期车辆预警日报</div>
-            <div class="text-xs opacity-80 mt-1">${today} · 共${over.length}台超期需处理${p0>0?' · 其中'+p0+'台严重超期':''}</div>
+            <div class="text-xs opacity-80 mt-1">${today} · 共${over.length}台超期${p0>0?' · <font color="yellow">'+p0+'台严重</font>':''}</div>
         </div>
         <div class="feishu-body">
-            <div style="margin-bottom:12px">负责人 <b>${g.manager}</b>，您好：今日盘点发现您门店有<b style="color:#f54a45">${over.length}台</b>车辆在供应链环节中超期，请及时跟进处理：</div>
+            <div style="margin-bottom:12px"><at id="${g.feishuId||''}"></at> ${g.manager}，您好：今日盘点发现您门店有<b style="color:#f54a45">${over.length}台</b>车辆超期，请及时跟进：</div>
             <div style="display:flex;gap:8px;margin-bottom:12px">
                 ${p0>0?`<div style="flex:1;background:#fef0f0;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:700;color:#f54a45">${p0}</div><div style="font-size:12px;color:#f54a45">严重P0</div></div>`:''}
                 <div style="flex:1;background:#fff3e0;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:700;color:#ff7d00">${p1}</div><div style="font-size:12px;color:#ff7d00">超期P1</div></div>
                 <div style="flex:1;background:#fffbe6;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:700;color:#faad14">${p2}</div><div style="font-size:12px;color:#faad14">预警P2</div></div>
             </div>
-            <div style="margin-bottom:12px">
-                <div style="font-size:13px;color:#646a73;margin-bottom:6px">环节分布</div>
-                ${Object.entries(stageMap).map(([s,c])=>`
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px">
-                    <span style="width:80px;color:#333">${s}</span>
-                    <div style="flex:1;height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden"><div style="width:${c/maxStage*100}%;height:100%;background:#3370ff;border-radius:3px"></div></div>
-                    <span style="width:30px;text-align:right;color:#333">${c}台</span>
-                </div>`).join('')}
-            </div>
-            <div style="font-size:12px;color:#8f959e;margin-bottom:10px">💡 P0严重超期车辆请优先处理，今日18:00前反馈处理进度</div>
-            <div>
-                <button class="feishu-btn" onclick="viewDetails('${name}')">📋 查看超期明细</button>
-                <button class="feishu-btn secondary" onclick="markHandle('${name}')">✅ 批量标记处理</button>
-            </div>
-        </div>
-    </div>`;
-    document.getElementById('previewArea').innerHTML=card;
-    window._currentCardJson=JSON.stringify(buildCardPayload(name,g,over),null,2);
-}
-
-function buildCardPayload(name,g,over){
-    const p0=g.vehicles.filter(v=>v._level==='P0').length;
-    const p1=g.vehicles.filter(v=>v._level==='P1').length;
-    const p2=g.vehicles.filter(v=>v._level==='P2').length;
-    return {msg_type:'interactive',card:{header:{title:{tag:'plain_text',content:`🚨 ${name} 超期预警日报`},template:p0>0?'red':'orange'},elements:[
-        {tag:'div',text:{tag:'lark_md',content:`负责人 **${g.manager}**：今日盘点发现您门店有 **${over.length}台** 车辆超期，${p0>0?`其中 **${p0}台严重超期**，`:''}请及时处理。`}},
+            ${Object.keys(stageMap).length?`<div style="margin-bottom:12px"><div style="font-size:13px;color:#646a73;margin-bottom:6px">环节分布</div>
+            ${Object.entries(stageMap).map(([s,c])=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px"><span style="width:80px;color:#333">${s}</span><div style="flex:1;height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden"><div style="width:${c/mx*100}%;height:100%;background:#3370ff;border-radius:3px"></div></div><span style="width:30px;text-align:right;color:#333">${c}台</span></div>`).join('')}</div>`:''}
+            <div style="font-size:12px;color:#8f959e;margin-bottom:10px">💡 P0车辆请优先处理，今日18:00前反馈进度</div>
+            <div><button class="feishu-btn">📋 查看明细</button><button class="feishu-btn secondary">✅ 批量处理</button></div>
+        </div></div>`;
+    window._cardJson=JSON.stringify({msg_type:'interactive',card:{header:{title:{tag:'plain_text',content:`🚨 ${name} 超期预警`},template:p0>0?'red':'orange'},elements:[
+        {tag:'div',text:{tag:'lark_md',content:`<at user_id="${g.feishuId||''}"></at> **${g.manager}**：您门店有 **${over.length}台** 超期车辆${p0>0?`，其中 <font color='red'>**${p0}台严重**</font>`:''}，请及时处理。`}},
         {tag:'div',fields:[
-            {is_short:true,text:{tag:'lark_md',content:`**🔴 严重P0**\n<font color='red'>${p0}台</font>`}},
-            {is_short:true,text:{tag:'lark_md',content:`**🟠 超期P1**\n<font color='orange'>${p1}台</font>`}},
-            {is_short:true,text:{tag:'lark_md',content:`**🟡 预警P2**\n<font color='yellow'>${p2}台</font>`}},
+            {is_short:true,text:{tag:'lark_md',content:`**🔴 P0严重**\n<font color='red'>${p0}台</font>`}},
+            {is_short:true,text:{tag:'lark_md',content:`**🟠 P1超期**\n<font color='orange'>${p1}台</font>`}},
+            {is_short:true,text:{tag:'lark_md',content:`**🟡 P2预警**\n<font color='yellow'>${p2}台</font>`}},
             {is_short:true,text:{tag:'lark_md',content:`**总计**\n${over.length}台`}}
         ]},
         {tag:'action',actions:[
-            {tag:'button',text:{tag:'plain_text',content:'📋 查看明细'},type:'primary',url:'https://example.com/overdue?store='+encodeURIComponent(name)},
-            {tag:'button',text:{tag:'plain_text',content:'✅ 标记处理'},type:'default',value:{store:name,action:'mark_handle'}}
+            {tag:'button',text:{tag:'plain_text',content:'📋 查看明细'},type:'primary'},
+            {tag:'button',text:{tag:'plain_text',content:'✅ 标记处理'},type:'default'}
         ]}
-    ]}};
+    ]}},null,2);
 }
 
 function renderDetailTable(){
     if(!currentStore||!storeGroups[currentStore])return;
     let vs=storeGroups[currentStore].vehicles;
-    const fs=document.getElementById('filterStage').value;
-    const fl=document.getElementById('filterLevel').value;
-    if(fs)vs=vs.filter(v=>v['当前环节']===fs||v.当前环节===fs);
+    const fs=document.getElementById('filterStage').value,fl=document.getElementById('filterLevel').value;
+    if(fs)vs=vs.filter(v=>v['当前环节']===fs);
     if(fl)vs=vs.filter(v=>v._level===fl);
     const tb=document.querySelector('#detailTable tbody');
-    if(!vs.length){tb.innerHTML='<tr><td colspan="7" class="text-center text-gray-400 py-8">无数据</td></tr>';return;}
-    tb.innerHTML=vs.map(v=>{
-        const vin=v['车架号']||v.vin||'';
-        const model=v['车型']||v.model||'';
-        const stage=v['当前环节']||v.当前环节||'';
-        const owner=v['负责人']||v.owner||'';
-        const days=v['超期天数']||0;
-        return `<tr>
-            <td class="font-mono text-xs">${vin}</td>
-            <td>${model}</td>
-            <td>${stage}</td>
-            <td>${owner}</td>
-            <td class="${v._level==='P0'?'text-red-500 font-semibold':v._level==='P1'?'text-orange-500':v._level==='P2'?'text-yellow-600':'text-gray-500'}">${days}天</td>
-            <td>${levelTag(v._level)}</td>
-            <td><button class="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100" onclick="markVehicleHandled('${vin}')">标记已处理</button></td>
-        </tr>`;
-    }).join('');
+    tb.innerHTML=vs.length?vs.map(v=>`<tr>
+        <td class="font-mono text-xs">${v['车架号']||''}</td><td>${v['车型']||''}</td><td>${v['当前环节']||''}</td><td>${v['负责人']||''}</td>
+        <td class="${v._level==='P0'?'text-red-500 font-semibold':v._level==='P1'?'text-orange-500':v._level==='P2'?'text-yellow-600':'text-gray-500'}">${v['超期天数']||0}天</td>
+        <td>${levelTag(v._level)}</td>
+        <td><button class="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100" onclick="markHandled('${v['车架号']}')">标记处理</button></td>
+    </tr>`).join(''):'<tr><td colspan="7" class="text-center text-gray-400 py-8">无数据</td></tr>';
 }
 
-function viewDetails(s){alert('真实场景下跳转到明细页面，已按门店+超期过滤：\n\n'+s+' · 超期'+storeGroups[s].vehicles.filter(v=>v._level!=='normal').length+'台');}
-function markHandle(s){if(confirm('确认将该门店超期车辆标记为已处理？（演示功能）')){pushedStores.add(s);renderStoreList();document.getElementById('previewStatus').textContent='已标记';document.getElementById('previewStatus').className='px-2 py-0.5 bg-green-100 text-green-600 rounded';addHistory(s,'mark','负责人标记已处理');}}
-function markVehicleHandled(vin){alert('已标记 '+vin+' 为处理中（演示），实际会回写系统并关闭预警');}
+function markHandled(vin){alert('已标记 '+vin+' 为处理中\n真实场景下会回写Hive/业务系统，关闭预警，并记录处理人/时间。');}
 
 function simulatePush(){
     if(!currentStore)return;
-    const btn=document.getElementById('simulateBtn');
-    btn.disabled=true;btn.textContent='发送中...';
+    const btn=document.getElementById('simulateBtn');btn.disabled=true;btn.textContent='发送中...';
     setTimeout(()=>{
-        pushedStores.add(currentStore);
-        renderStoreList();
-        document.getElementById('previewStatus').textContent='已推送 ✅';
-        document.getElementById('previewStatus').className='px-2 py-0.5 bg-green-100 text-green-600 rounded';
-        addHistory(currentStore,'push','飞书卡片已推送给 '+storeGroups[currentStore].manager);
+        pushedStores.add(currentStore);renderStoreList();
+        document.getElementById('previewStatus').textContent='已推送 ✅';document.getElementById('previewStatus').className='px-2 py-0.5 bg-green-100 text-green-600 rounded';
+        addHistory(currentStore,'push','飞书卡片推送给 '+storeGroups[currentStore].manager+' @'+(storeGroups[currentStore].feishuId||'').substring(0,8));
         btn.textContent='📤 再次发送';btn.disabled=false;
     },800);
 }
 
 function pushAll(){
-    const btn=document.getElementById('pushAllBtn');
-    btn.disabled=true;btn.textContent='推送中...';
-    let i=0;
-    const stores=Object.keys(storeGroups).filter(s=>!pushedStores.has(s));
-    const timer=setInterval(()=>{
-        if(i>=stores.length){clearInterval(timer);btn.textContent='🚀 一键全部推送';btn.disabled=false;return;}
-        pushedStores.add(stores[i]);
-        addHistory(stores[i],'push','批量推送给 '+storeGroups[stores[i]].manager);
-        renderStoreList();
-        if(currentStore===stores[i]){document.getElementById('previewStatus').textContent='已推送 ✅';document.getElementById('previewStatus').className='px-2 py-0.5 bg-green-100 text-green-600 rounded';}
-        i++;
+    const btn=document.getElementById('pushAllBtn');btn.disabled=true;btn.textContent='推送中...';
+    const stores=Object.keys(storeGroups).filter(s=>!pushedStores.has(s)&&storeGroups[s].vehicles.some(v=>v._level!=='normal'));
+    let i=0;const t=setInterval(()=>{if(i>=stores.length){clearInterval(t);btn.textContent='🚀 一键全部推送';btn.disabled=false;return;}
+        pushedStores.add(stores[i]);addHistory(stores[i],'push','批量推送给 '+storeGroups[stores[i]].manager);renderStoreList();
+        if(currentStore===stores[i]){document.getElementById('previewStatus').textContent='已推送 ✅';document.getElementById('previewStatus').className='px-2 py-0.5 bg-green-100 text-green-600 rounded';}i++;
     },300);
 }
 
-function addHistory(store,type,desc){
-    pushHistory.unshift({time:new Date().toLocaleTimeString('zh-CN',{hour12:false}),store,type,desc});
-    renderHistory();
-}
-function renderHistory(){
-    const el=document.getElementById('pushHistory');
-    if(!pushHistory.length){el.innerHTML='<div class="text-center text-gray-400 py-4 text-xs">暂无推送记录</div>';return;}
-    el.innerHTML=pushHistory.slice(0,20).map(h=>`<div class="flex items-center gap-3 p-2 rounded hover:bg-gray-50">
+function addHistory(store,type,desc){pushHistory.unshift({time:new Date().toLocaleTimeString('zh-CN',{hour12:false}),store,type,desc});renderHistory();}
+function renderHistory(){const el=document.getElementById('pushHistory');
+    el.innerHTML=pushHistory.length?pushHistory.slice(0,20).map(h=>`<div class="flex items-center gap-3 p-2 rounded hover:bg-gray-50">
         <span class="text-xs text-gray-400 w-16">${h.time}</span>
         <span class="badge ${h.type==='push'?'bg-blue-100 text-blue-600':'bg-green-100 text-green-600'}">${h.type==='push'?'推送':'标记'}</span>
-        <span class="text-gray-700">${h.store}</span>
-        <span class="text-gray-500 text-xs ml-auto">${h.desc}</span>
-    </div>`).join('');
+        <span class="text-gray-700">${h.store}</span><span class="text-gray-500 text-xs ml-auto">${h.desc}</span>
+    </div>`).join(''):'<div class="text-center text-gray-400 py-4 text-xs">暂无推送记录</div>';
 }
 
-function copyCardJson(){
-    if(!window._currentCardJson){alert('请先选择门店');return;}
-    navigator.clipboard.writeText(window._currentCardJson).then(()=>alert('卡片JSON已复制到剪贴板，可直接在飞书机器人调试工具中测试'));
-}
-function exportCurrentStore(){if(!currentStore){alert('请先选择门店');return;}exportVehicles(storeGroups[currentStore].vehicles,currentStore+'_超期明细.xlsx');}
-function exportAllDetails(){exportVehicles(rawData,'全门店超期明细_'+new Date().toISOString().slice(0,10)+'.xlsx');}
-function exportVehicles(data,filename){
-    const rows=[['车架号','车型','门店','负责人','当前环节','进入时间','是否超期','超期天数','等级']];
-    data.forEach(v=>rows.push([v['车架号']||'',v['车型']||'',v['门店']||'',v['负责人']||'',v['当前环节']||'',v['进入环节时间']||'',v['是否超期']||'',v['超期天数']||0,v._level||'']));
-    XLSX.writeFile(XLSX.utils.book_append_sheet(XLSX.utils.book_new(),XLSX.utils.aoa_to_sheet(rows),'明细'),filename);
-}
-
-function showConfig(){document.getElementById('configModal').classList.remove('hidden');document.getElementById('configModal').classList.add('flex');}
-function hideConfig(){document.getElementById('configModal').classList.add('hidden');document.getElementById('configModal').classList.remove('flex');}
-function saveConfig(){
-    thresholds.P0=3;thresholds.P1=1;thresholds.P2=0;
-    if(rawData.length)processData();
-    hideConfig();
-    alert('配置已保存（当前为演示版本，后续版本将支持分门店/分环节动态阈值配置）');
+function copyCardJson(){if(!window._cardJson){alert('请先选择门店');return;}navigator.clipboard.writeText(window._cardJson).then(()=>alert('飞书卡片JSON已复制，可在飞书开放平台调试工具中测试发送'));}
+function exportCurrentStore(){if(!currentStore){alert('请选择门店');return;}exportExcel(storeGroups[currentStore].vehicles,currentStore+'_超期明细.xlsx');}
+function exportAllDetails(){exportExcel(rawData,'全门店超期明细_'+new Date().toISOString().slice(0,10)+'.xlsx');}
+function exportExcel(data,fn){
+    const rows=[['车架号','车型','门店','负责人','当前环节','进入时间','超期天数','等级']];
+    data.forEach(v=>rows.push([v['车架号']||'',v['车型']||'',v['门店']||'',v['负责人']||'',v['当前环节']||'',v['进入环节时间']||'',v['超期天数']||0,v._level||'']));
+    XLSX.writeFile(XLSX.utils.book_append_sheet(XLSX.utils.book_new(),XLSX.utils.aoa_to_sheet(rows),'明细'),fn);
 }
 </script>
 </body>
