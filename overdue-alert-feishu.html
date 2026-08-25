@@ -50,8 +50,9 @@
             <p class="text-sm text-gray-500 mt-1">数据源对接Hive/风神 → 每日盘点 → 按门店汇总 → 推送飞书卡片给负责人</p>
         </div>
         <div class="flex gap-2">
+            <button onclick="downloadTemplate()" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-1">📄 下载模板</button>
             <button onclick="showDataSourceConfig()" id="dsBtn" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full bg-green-500 pulse-dot" id="dsStatus"></span>
+                <span class="w-2 h-2 rounded-full bg-gray-400" id="dsStatus"></span>
                 <span id="dsLabel">数据源：未配置</span>
             </button>
             <button onclick="refreshData()" class="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">🔄 刷新数据</button>
@@ -66,7 +67,7 @@
             <div class="text-xs text-gray-400">支持Hive直连 / 风神数据集API / Excel导入兜底</div>
         </div>
         <div class="grid grid-cols-3 gap-4 mb-4">
-            <div class="data-source-card active" id="dsType-hive" onclick="selectDsType('hive')">
+            <div class="data-source-card" id="dsType-hive" onclick="selectDsType('hive')">
                 <div class="flex items-center gap-3 mb-2">
                     <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-xl">🐝</div>
                     <div>
@@ -74,7 +75,7 @@
                         <div class="text-xs text-gray-500">通过API服务执行SQL查询</div>
                     </div>
                 </div>
-                <div class="text-xs text-green-600">✅ 推荐 · 每日自动取数</div>
+                <div class="text-xs text-green-600">🔌 生产环境自动取数</div>
             </div>
             <div class="data-source-card" id="dsType-fengshen" onclick="selectDsType('fengshen')">
                 <div class="flex items-center gap-3 mb-2">
@@ -86,19 +87,19 @@
                 </div>
                 <div class="text-xs text-blue-600">🔌 对接内部BI平台</div>
             </div>
-            <div class="data-source-card" id="dsType-excel" onclick="selectDsType('excel')">
+            <div class="data-source-card active" id="dsType-excel" onclick="selectDsType('excel')">
                 <div class="flex items-center gap-3 mb-2">
                     <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-xl">📊</div>
                     <div>
-                        <div class="font-medium text-gray-800">Excel/CSV导入</div>
-                        <div class="text-xs text-gray-500">手动上传文件（兜底方案）</div>
+                        <div class="font-medium text-gray-800">CSV/Excel上传</div>
+                        <div class="text-xs text-gray-500">手动上传文件（当前推荐）</div>
                     </div>
                 </div>
-                <div class="text-xs text-gray-500">📎 临时/测试用</div>
+                <div class="text-xs text-orange-600">✅ 即开即用，无需后端</div>
             </div>
         </div>
 
-        <div id="dsConfig-hive" class="ds-config">
+        <div id="dsConfig-hive" class="ds-config hidden">
             <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-sm text-gray-600 mb-1">Hive查询API地址</label>
@@ -236,12 +237,13 @@ ORDER BY
         <div id="dsConfig-excel" class="ds-config hidden">
             <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 hover:bg-blue-50 transition cursor-pointer" onclick="document.getElementById('fileInput').click()">
                 <div class="text-4xl mb-2">📊</div>
-                <div class="text-gray-600 text-sm mb-1">点击上传Excel/CSV文件</div>
-                <div class="text-xs text-gray-400">字段参考模板下载</div>
-                <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFile(event)">
+                <div class="text-gray-600 text-sm mb-1">点击上传 CSV 文件（推荐）或 Excel 文件</div>
+                <div class="text-xs text-gray-400">点顶部「📄 下载模板」获取标准格式CSV（Excel可直接打开编辑）</div>
+                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleFile(event)">
             </div>
             <div class="flex gap-2 mt-3">
-                <button onclick="downloadTemplate()" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">📄 下载模板</button>
+                <button onclick="downloadTemplate()" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">📄 下载CSV模板</button>
+                <span class="text-xs text-gray-400 self-center">💡 CSV格式兼容性最好，双击用Excel编辑后保存即可上传</span>
             </div>
         </div>
     </div>
@@ -405,7 +407,7 @@ let storeGroups = {};
 let currentStore = null;
 let pushedStores = new Set();
 let pushHistory = [];
-let currentDsType = 'hive';
+let currentDsType = 'excel';
 let thresholds = { P0:3, P1:1, P2:0 };
 let dsConfig = { type:'hive', configured:false };
 
@@ -471,8 +473,15 @@ function saveSchedule(){
 }
 
 function downloadTemplate(){
-    const data=[['车架号','车型','门店','负责人','负责人飞书ID','当前环节','进入环节时间','是否超期','超期天数'],['LFV2A21K0D3000001','大众朗逸 2023','朝阳店','张经理','ou_xxx123','整备-喷漆','2025-08-22 10:00','是',4]];
-    XLSX.writeFile(XLSX.utils.book_append_sheet(XLSX.utils.book_new(),XLSX.utils.aoa_to_sheet(data),'模板'),'超期车辆导入模板.xlsx');
+    const headers=['车架号','车型','门店','负责人','负责人飞书ID','当前环节','进入环节时间','是否超期','超期天数'];
+    const sample=['LFV2A21K0D3000001','大众朗逸 2023','朝阳店','张经理','ou_xxx123','整备-喷漆','2025-08-22 10:00','是','4'];
+    let csv = '\uFEFF' + headers.join(',') + '\n' + sample.join(',') + '\n';
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '超期车辆导入模板.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 function loadSample(){
@@ -504,16 +513,51 @@ function loadSample(){
     processData();
 }
 
+function parseCSV(text){
+    const lines = text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(l=>l.trim());
+    if(!lines.length) return [];
+    const headers = lines[0].split(',').map(h=>h.trim());
+    return lines.slice(1).map(line=>{
+        const vals=[]; let cur=''; let inQ=false;
+        for(let i=0;i<line.length;i++){
+            const c=line[i];
+            if(c==='"'){ if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ; }
+            else if(c===','&&!inQ){vals.push(cur);cur='';}
+            else cur+=c;
+        }
+        vals.push(cur);
+        const obj={};
+        headers.forEach((h,i)=>obj[h]=vals[i]?vals[i].trim():'');
+        return obj;
+    });
+}
+
 function handleFile(e){ if(e.target.files[0]){
-    const f=e.target.files[0];const r=new FileReader();
-    r.onload=ev=>{try{const wb=XLSX.read(ev.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];const j=XLSX.utils.sheet_to_json(ws,{defval:''});
-        rawData=j.map(r=>({...r,'超期天数':Number(r['超期天数']||0)})).filter(r=>r['车架号']);
-        dsConfig.configured=true;dsConfig.type='excel';
-        document.getElementById('dsLabel').textContent='数据源：Excel - '+f.name;
-        document.getElementById('dsStatus').className='w-2 h-2 rounded-full bg-green-500';
-        processData();
-    }catch(err){alert('解析失败：'+err.message);}};
-    r.readAsArrayBuffer(f);
+    const f=e.target.files[0];
+    const isCSV = f.name.toLowerCase().endsWith('.csv');
+    const r=new FileReader();
+    r.onload=ev=>{
+        try{
+            let j;
+            if(isCSV || typeof XLSX === 'undefined'){
+                const text = typeof ev.target.result === 'string' ? ev.target.result : new TextDecoder('utf-8').decode(ev.target.result);
+                j = parseCSV(text);
+            }else{
+                const wb=XLSX.read(ev.target.result,{type:'array'});
+                const ws=wb.Sheets[wb.SheetNames[0]];
+                j=XLSX.utils.sheet_to_json(ws,{defval:''});
+            }
+            rawData=j.map(r=>({...r,'超期天数':Number(r['超期天数']||0),'是否超期':r['是否超期']||''})).filter(r=>r['车架号']);
+            if(!rawData.length){alert('未解析到有效数据，请检查文件格式');return;}
+            dsConfig.configured=true;dsConfig.type='excel';
+            document.getElementById('dsLabel').textContent='数据源：'+(isCSV?'CSV':'Excel')+' - '+f.name;
+            document.getElementById('dsStatus').className='w-2 h-2 rounded-full bg-green-500';
+            selectDsType('excel');
+            processData();
+        }catch(err){alert('解析失败：'+err.message+'\n\n请尝试使用CSV格式（UTF-8编码）');}
+    };
+    if(isCSV) r.readAsText(f,'utf-8');
+    else{ try{r.readAsArrayBuffer(f);}catch(e){r.readAsText(f,'utf-8');} }
 }}
 
 function getLevel(days){
@@ -667,12 +711,19 @@ function renderHistory(){const el=document.getElementById('pushHistory');
 }
 
 function copyCardJson(){if(!window._cardJson){alert('请先选择门店');return;}navigator.clipboard.writeText(window._cardJson).then(()=>alert('飞书卡片JSON已复制，可在飞书开放平台调试工具中测试发送'));}
-function exportCurrentStore(){if(!currentStore){alert('请选择门店');return;}exportExcel(storeGroups[currentStore].vehicles,currentStore+'_超期明细.xlsx');}
-function exportAllDetails(){exportExcel(rawData,'全门店超期明细_'+new Date().toISOString().slice(0,10)+'.xlsx');}
-function exportExcel(data,fn){
-    const rows=[['车架号','车型','门店','负责人','当前环节','进入时间','超期天数','等级']];
-    data.forEach(v=>rows.push([v['车架号']||'',v['车型']||'',v['门店']||'',v['负责人']||'',v['当前环节']||'',v['进入环节时间']||'',v['超期天数']||0,v._level||'']));
-    XLSX.writeFile(XLSX.utils.book_append_sheet(XLSX.utils.book_new(),XLSX.utils.aoa_to_sheet(rows),'明细'),fn);
+function exportCurrentStore(){if(!currentStore){alert('请选择门店');return;}exportData(storeGroups[currentStore].vehicles,currentStore+'_超期明细.csv');}
+function exportAllDetails(){exportData(rawData,'全门店超期明细_'+new Date().toISOString().slice(0,10)+'.csv');}
+function exportData(data,fn){
+    const headers=['车架号','车型','门店','负责人','当前环节','进入时间','是否超期','超期天数','等级'];
+    let csv='\uFEFF'+headers.join(',')+'\n';
+    data.forEach(v=>{
+        const row=[v['车架号']||'',v['车型']||'',v['门店']||'',v['负责人']||'',v['当前环节']||'',v['进入环节时间']||'',v['是否超期']||'',v['超期天数']||0,v._level||''];
+        csv += row.map(c=>{const s=String(c).replace(/"/g,'""'); return /[,"\n]/.test(s)?'"'+s+'"':s;}).join(',')+'\n';
+    });
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=fn;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
 </script>
 </body>
