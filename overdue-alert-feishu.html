@@ -806,10 +806,10 @@ function quickSetWebhook(){
     div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
     div.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;width:540px;max-width:90vw;max-height:85vh;overflow-y:auto">
         <h3 style="margin:0 0 12px 0;font-size:16px">⚙️ 飞书推送配置</h3>${html}
-        <div style="font-size:12px;color:#f54a45;background:#fef0f0;border-radius:6px;padding:6px 8px;margin:12px 0;line-height:1.5">
-            ⚠️ 飞书自定义机器人卡片按钮<strong>只能做URL跳转</strong>，不能直接下载文件或触发交互回调。<br>
-            所以未配置③下载URL时，虽然卡片有"📄下载CSV"按钮，但无法直接下载。<br>
-            解决方案：负责人打开本工具页面（在工具里选门店点下载即可），或在你们业务系统里做一个CSV下载页面，把URL填到③。
+        <div style="font-size:12px;color:#f54a45;background:#fef0f0;border-radius:6px;padding:8px 10px;margin:12px 0;line-height:1.6">
+            ⚠️ <strong>飞书自定义机器人的限制</strong>：卡片按钮<strong>必须配置跳转URL</strong>才能点击；没有URL的按钮一点击就会提示「该应用尚未配置卡片交互功能」。<br>
+            因此：<strong>未配置②③④链接时，卡片里不会出现对应按钮</strong>，相关操作（下载CSV、确认接收）会自动改成卡片底部的<strong>文字提示</strong>（如"请在工具页面下载""请在群内回复已知悉"），保证不会报错。<br>
+            只有配置了 Webhook（①）即可正常推送卡片+TOP10明细。
         </div>
         <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
             <button id="cfg_cancel" style="padding:6px 16px;border:1px solid #ddd;border-radius:6px;cursor:pointer;background:#fff">取消</button>
@@ -888,13 +888,19 @@ function buildCardPayload(name,g){
             detailText+=`|${lv}|${v['超期天数']}天|${vin}|${model}|${stage}|\n`;
         });
         if(over.length>TOP){
-            detailText+='\n> 🔺 还有'+(over.length-TOP)+'台未显示，点击下方「📄 下载全店明细CSV」或「📋 查看完整明细」获取全部';
+            detailText+='\n> 🔺 还有'+(over.length-TOP)+'台未显示，完整清单请在超期预警工具页面「下载全店明细CSV」获取，或群内@管理员';
         }else{
-            detailText+='\n> 以上为全部超期车辆，如需下载请点击下方「📄 下载全店明细CSV」';
+            detailText+='\n> 以上为全部超期车辆';
         }
         detailText+='\n';
     }
     const today=new Date().toLocaleDateString('zh-CN');
+    // 飞书自定义机器人：只有带 url 的按钮才能点击，否则会报"未配置卡片交互功能"
+    // 没有 url 的操作（下载CSV、确认接收）一律改为正文文字提示，不做成按钮
+    const actions=buildCardActions(name,g.manager||'');
+    const footerNotes=[];
+    if(!getDownloadUrl()) footerNotes.push('📥 **完整明细CSV**：请在「超期预警工具」页面选择本门店后，点击「📄 下载全店明细CSV」获取全部车辆');
+    if(!getAckUrl()) footerNotes.push('✅ **确认接收**：请在群内回复「已知悉」，P0车辆请同步处理进度');
     return {
         msg_type:'interactive',
         card:{
@@ -915,25 +921,25 @@ function buildCardPayload(name,g){
                 ...(stageText?[{tag:'div',text:{tag:'lark_md',content:'```text\n'+stageText+'```'}}]:[]),
                 ...(detailText?[{tag:'div',text:{tag:'lark_md',content:detailText}}]:[]),
                 {tag:'hr'},
-                {tag:'div',text:{tag:'lark_md',content:'> 💡 **处理要求**：P0严重超期车辆请优先处理，今日18:00前在系统中反馈处理进度。如遇无法解决的问题，请及时升级。'}},
-                {tag:'action',actions:buildCardActions(name,g.manager||'')}
+                {tag:'div',text:{tag:'lark_md',content:'> 💡 **处理要求**：P0严重超期车辆请优先处理，今日18:00前反馈处理进度。如遇无法解决的问题，请及时升级。'}},
+                ...(footerNotes.length?[{tag:'div',text:{tag:'lark_md',content:footerNotes.map(n=>'> '+n).join('\n')}}]:[]),
+                ...(actions.length?[{tag:'action',actions:actions}]:[])
             ]
         }
     };
 }
 function buildCardActions(storeName,managerName){
+    // 关键：只返回带 url 的按钮。任何无 url 的按钮在飞书自定义机器人里点击都会报
+    // “该应用尚未配置卡片交互功能”，所以无 url 的操作改为正文文字，不在此返回。
     const actions=[];
     const detailUrl=getDetailUrl();
     const downloadUrl=getDownloadUrl();
     const ackUrl=getAckUrl();
     const today=new Date().toISOString().slice(0,10);
-    // 1. 下载按钮：永远放第一个
+    // 1. 下载按钮（有 downloadUrl 才显示，没有则不输出按钮，改由正文文字提示）
     if(downloadUrl){
         const dl=downloadUrl.replace(/\{store\}/g,encodeURIComponent(storeName)).replace(/\{date\}/g,today);
         actions.push({tag:'button',text:{tag:'plain_text',content:'📄 下载全店明细CSV'},type:'primary',url:dl});
-    }else{
-        // 没配置下载URL，显示一个纯文案按钮（无跳转，避免报错），提示在群内要/或打开本工具下载
-        actions.push({tag:'button',text:{tag:'plain_text',content:'📄 全店CSV请在工具页面下载'},type:'primary'});
     }
     // 2. 查看完整明细
     if(detailUrl){
@@ -946,10 +952,9 @@ function buildCardActions(storeName,managerName){
                         .replace(/\{manager\}/g,encodeURIComponent(managerName||''));
         actions.push({tag:'button',text:{tag:'plain_text',content:'✅ 已知悉并处理'},type:'default',url:aUrl});
     }
-    // 保证至少1个按钮
-    if(actions.length===0){
-        actions.push({tag:'button',text:{tag:'plain_text',content:'💡 请在群内回复确认'},type:'default'});
-    }
+    // 注意：此处不再添加任何无 url 的兜底按钮。
+    // 无 url 按钮点击会触发卡片回调，自定义机器人未配置回调地址就会报错。
+    // 下载/确认等无 URL 的操作，已在卡片正文用文字说明。
     return actions;
 }
 
