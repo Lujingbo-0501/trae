@@ -720,9 +720,12 @@ function renderPreview(name,g){
             ${over.length>6?`<div style="padding:4px 8px;text-align:center;color:#8f959e;font-size:11px;background:#fafafa">还有${over.length-6}台 · 点击下方「📄下载全店明细CSV」</div>`:''}
             </div></div>`;
     }
+    const escName=name.replace(/'/g,"\\'");
     const buttons=[
-        `<button class="feishu-btn" onclick="scrollToDetail()">${hasDetailUrl?'📋 查看完整明细':'📋 滚到底部看完整明细'}</button>`,
-        `<button class="feishu-btn secondary" onclick="exportCurrentStoreCSV('${name.replace(/'/g,"\\'")}')">📄 下载全店明细CSV</button>`,
+        hasDetailUrl
+            ? `<button class="feishu-btn" onclick="openDetailUrl('${escName}')">📋 查看完整明细（打开风神看板）</button>`
+            : `<button class="feishu-btn" onclick="scrollToDetail()">📋 滚到底部看完整明细</button>`,
+        `<button class="feishu-btn secondary" onclick="exportCurrentStoreCSV('${escName}')">📄 下载全店明细CSV</button>`,
         ackUrl?`<button class="feishu-btn secondary" onclick="markPreviewAck()">✅ 已知悉并处理</button>`:'<button class="feishu-btn secondary" onclick="markPreviewAck()">💡 群内回复确认</button>'
     ].join('');
     document.getElementById('previewArea').innerHTML=`<div class="feishu-card">
@@ -770,6 +773,38 @@ function setWebhook(url){try{localStorage.setItem('feishu_webhook',url);}catch(e
 function setDetailUrl(url){try{localStorage.setItem('detail_url',url);}catch(e){}}
 function setDownloadUrl(url){try{localStorage.setItem('download_url',url);}catch(e){}}
 function setAckUrl(url){try{localStorage.setItem('ack_url',url);}catch(e){}}
+// 门店名 → 看板筛选值（门店ID）映射，仅当看板按门店ID筛选时需要
+function getStoreMap(){
+    try{return JSON.parse(localStorage.getItem('store_map')||'{}');}catch(e){return {};}
+}
+function setStoreMap(obj){try{localStorage.setItem('store_map',JSON.stringify(obj||{}));}catch(e){}}
+function parseStoreMapText(text){
+    // 支持每行 "门店名=ID" 或 "门店名,ID" 或 "门店名<Tab>ID"，#开头为注释
+    const map={};
+    String(text||'').split(/\r?\n/).forEach(line=>{
+        line=line.trim();
+        if(!line||line.startsWith('#'))return;
+        const m=line.split(/[=,，\t]/);
+        if(m.length>=2){
+            const name=m[0].trim();const id=m.slice(1).join('=').trim();
+            if(name&&id)map[name]=id;
+        }
+    });
+    return map;
+}
+function getStoreId(storeName){
+    const map=getStoreMap();
+    return map[storeName]||storeName; // 没配映射则回退用门店名本身
+}
+// 把URL模板中的占位符替换为真实值（manager可选）
+function resolveUrlTemplate(tpl,storeName,managerName){
+    const today=new Date().toISOString().slice(0,10);
+    return String(tpl||'')
+        .replace(/\{storeId\}/g,encodeURIComponent(getStoreId(storeName)))
+        .replace(/\{store\}/g,encodeURIComponent(storeName))
+        .replace(/\{manager\}/g,encodeURIComponent(managerName||''))
+        .replace(/\{date\}/g,today);
+}
 function updateWebhookStatus(){
     const wh=getWebhook();
     const btn=document.getElementById('webhookStatusBtn');
@@ -782,34 +817,42 @@ function quickSetWebhook(){
     const du=getDetailUrl();
     const dl=getDownloadUrl();
     const au=getAckUrl();
+    const smap=getStoreMap();
+    const smapText=Object.entries(smap).map(([k,v])=>k+'='+v).join('\n');
     const html=`<div style="text-align:left">
         <div style="margin-bottom:12px"><b>① 飞书机器人 Webhook （必填）</b><br>
         <span style="color:#888;font-size:12px">飞书群→群设置→群机器人→添加"自定义机器人"→复制Webhook</span><br>
         <input id="cfg_wh" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${wh}" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx"></div>
 
-        <div style="margin-bottom:12px"><b>② 完整明细页面 URL （可选）</b><br>
-        <span style="color:#888;font-size:12px">"查看完整明细"按钮跳转地址，支持占位符：<code>{store}</code>→门店名</span><br>
-        <input id="cfg_du" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${du}" placeholder="https://your-system.com/overdue?store={store}"></div>
+        <div style="margin-bottom:12px"><b>② 风神看板/明细页面 URL 模板（可选，推荐）</b><br>
+        <span style="color:#888;font-size:12px;line-height:1.6">
+        在看板上选好一个门店筛选后，复制浏览器地址栏链接粘到这里。<b>50个门店只需1个模板</b>，把链接里的门店值换成占位符：<br>
+        · 看板按<b>门店名</b>筛选 → 用 <code>{store}</code>，例：<code>https://看板/xxx?dept={store}</code><br>
+        · 看板按<b>门店ID</b>筛选 → 用 <code>{storeId}</code>，并在下方⑤填门店名↔ID对照表<br>
+        · 日期可加 <code>{date}</code>（自动填当天，YYYY-MM-DD）</span><br>
+        <input id="cfg_du" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${du}" placeholder="https://fengshen.xxx.com/dashboard/123?store={store}&date={date}"></div>
 
-        <div style="margin-bottom:12px"><b>③ CSV下载 URL （可选）</b><br>
-        <span style="color:#888;font-size:12px">"下载全店明细CSV"按钮跳转地址。建议对接内部系统生成CSV直接下载。<br>
-        支持占位符：<code>{store}</code>、<code>{date}</code>（YYYY-MM-DD）<br>
-        ⚠️ 自定义机器人卡片按钮只能跳URL，不能直接浏览器下载。如果不配置，负责人可以在本系统页面点下载。</span><br>
-        <input id="cfg_dl" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${dl}" placeholder="https://your-system.com/overdue/download?store={store}&date={date}"></div>
+        <div style="margin-bottom:12px"><b>③ CSV下载 URL 模板（可选）</b><br>
+        <span style="color:#888;font-size:12px;line-height:1.6">若看板/系统支持直接导出CSV，把导出链接填这里。占位符同②（<code>{store}</code>/<code>{storeId}</code>/<code>{date}</code>）。<br>不填则卡片用文字提示去工具页面下载，不会报错。</span><br>
+        <input id="cfg_dl" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${dl}" placeholder="https://xxx/overdue/download?store={storeId}&date={date}"></div>
 
-        <div style="margin-bottom:8px"><b>④ 已知悉/确认 URL （可选）</b><br>
-        <span style="color:#888;font-size:12px">支持占位符：<code>{store}</code>、<code>{manager}</code><br>
-        未配置则不显示此按钮，改由负责人在群内回复确认即可。</span><br>
-        <input id="cfg_au" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${au}" placeholder="https://your-system.com/overdue/ack?store={store}&manager={manager}"></div>
+        <div style="margin-bottom:12px"><b>④ 已知悉/确认 URL 模板（可选）</b><br>
+        <span style="color:#888;font-size:12px">占位符：<code>{store}</code>、<code>{storeId}</code>、<code>{manager}</code>；不填则卡片提示在群内回复"已知悉"。</span><br>
+        <input id="cfg_au" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${au}" placeholder="https://xxx/ack?store={storeId}"></div>
+
+        <div style="margin-bottom:8px"><b>⑤ 门店名 ↔ 看板门店ID 对照表（仅看板按ID筛选时需要）</b><br>
+        <span style="color:#888;font-size:12px;line-height:1.6">每行一家店，格式 <code>门店名=门店ID</code>（也支持逗号/制表符分隔）。<b>没配的门店会自动回退用门店名</b>。#开头为注释。</span><br>
+        <textarea id="cfg_smap" rows="5" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px;font-family:monospace" placeholder="朝阳店=8801&#10;海淀店=8802&#10;浦东店=8803&#10;# 这是注释行">${smapText}</textarea></div>
     </div>`;
     const div=document.createElement('div');
     div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
-    div.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;width:540px;max-width:90vw;max-height:85vh;overflow-y:auto">
+    div.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;width:580px;max-width:92vw;max-height:88vh;overflow-y:auto">
         <h3 style="margin:0 0 12px 0;font-size:16px">⚙️ 飞书推送配置</h3>${html}
+        <div style="font-size:12px;color:#1f6b3a;background:#eafaf0;border-radius:6px;padding:8px 10px;margin:12px 0;line-height:1.6">
+            ✅ <strong>推荐用法</strong>：只要填 ① Webhook + ② 看板URL模板，推送后每家门店的卡片都会带「📋 查看完整明细」按钮，点开自动定位到该门店，<b>50家店共用1个模板，无需50个链接</b>。
+        </div>
         <div style="font-size:12px;color:#f54a45;background:#fef0f0;border-radius:6px;padding:8px 10px;margin:12px 0;line-height:1.6">
-            ⚠️ <strong>飞书自定义机器人的限制</strong>：卡片按钮<strong>必须配置跳转URL</strong>才能点击；没有URL的按钮一点击就会提示「该应用尚未配置卡片交互功能」。<br>
-            因此：<strong>未配置②③④链接时，卡片里不会出现对应按钮</strong>，相关操作（下载CSV、确认接收）会自动改成卡片底部的<strong>文字提示</strong>（如"请在工具页面下载""请在群内回复已知悉"），保证不会报错。<br>
-            只有配置了 Webhook（①）即可正常推送卡片+TOP10明细。
+            ⚠️ <strong>飞书自定义机器人限制</strong>：卡片按钮<strong>必须带跳转URL</strong>，否则点击会提示「该应用尚未配置卡片交互功能」。未配置链接的操作会自动改为卡片内<strong>文字提示</strong>，不会报错。
         </div>
         <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
             <button id="cfg_cancel" style="padding:6px 16px;border:1px solid #ddd;border-radius:6px;cursor:pointer;background:#fff">取消</button>
@@ -823,8 +866,13 @@ function quickSetWebhook(){
         setDetailUrl(div.querySelector('#cfg_du').value.trim());
         setDownloadUrl(div.querySelector('#cfg_dl').value.trim());
         setAckUrl(div.querySelector('#cfg_au').value.trim());
+        const map=parseStoreMapText(div.querySelector('#cfg_smap').value);
+        setStoreMap(map);
         document.body.removeChild(div);
-        alert('✅ 配置已保存！\n\n卡片正文中默认嵌入TOP 10明细，底部会有"📄下载CSV"按钮。');
+        alert('✅ 配置已保存！\n\n'
+            +(getDetailUrl()?'已配置看板URL模板，推送卡片会带「📋 查看完整明细」按钮，自动定位到对应门店。\n':'')
+            +(Object.keys(map).length?('门店ID映射：已配置 '+Object.keys(map).length+' 家门店。\n'):'')
+            +'卡片正文默认嵌入TOP 10明细。');
         if(currentStore){
             const g=storeGroups[currentStore];
             if(g)try{renderPreview(currentStore,g);}catch(e){}
@@ -834,6 +882,14 @@ function quickSetWebhook(){
 function scrollToDetail(){
     const el=document.getElementById('detailTable');
     if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function openDetailUrl(storeName){
+    const name=storeName||currentStore;
+    const tpl=getDetailUrl();
+    if(!tpl){alert('还没有配置看板URL模板，请点「⚙️ 配置飞书推送」在②里填写。');quickSetWebhook();return;}
+    const url=resolveUrlTemplate(tpl,name,storeGroups[name]?storeGroups[name].manager:'');
+    console.log('明细链接：',url);
+    window.open(url,'_blank');
 }
 function exportCurrentStoreCSV(storeName){
     const name=storeName||currentStore;
@@ -935,22 +991,17 @@ function buildCardActions(storeName,managerName){
     const detailUrl=getDetailUrl();
     const downloadUrl=getDownloadUrl();
     const ackUrl=getAckUrl();
-    const today=new Date().toISOString().slice(0,10);
-    // 1. 下载按钮（有 downloadUrl 才显示，没有则不输出按钮，改由正文文字提示）
+    // 1. 下载按钮（有 downloadUrl 才显示）
     if(downloadUrl){
-        const dl=downloadUrl.replace(/\{store\}/g,encodeURIComponent(storeName)).replace(/\{date\}/g,today);
-        actions.push({tag:'button',text:{tag:'plain_text',content:'📄 下载全店明细CSV'},type:'primary',url:dl});
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📄 下载全店明细CSV'},type:'primary',url:resolveUrlTemplate(downloadUrl,storeName,managerName)});
     }
-    // 2. 查看完整明细
+    // 2. 查看完整明细（风神看板）
     if(detailUrl){
-        const url=detailUrl.replace(/\{store\}/g,encodeURIComponent(storeName));
-        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看完整明细'},type:'default',url:url});
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看完整明细'},type:'default',url:resolveUrlTemplate(detailUrl,storeName,managerName)});
     }
     // 3. 已知悉/确认
     if(ackUrl){
-        const aUrl=ackUrl.replace(/\{store\}/g,encodeURIComponent(storeName))
-                        .replace(/\{manager\}/g,encodeURIComponent(managerName||''));
-        actions.push({tag:'button',text:{tag:'plain_text',content:'✅ 已知悉并处理'},type:'default',url:aUrl});
+        actions.push({tag:'button',text:{tag:'plain_text',content:'✅ 已知悉并处理'},type:'default',url:resolveUrlTemplate(ackUrl,storeName,managerName)});
     }
     // 注意：此处不再添加任何无 url 的兜底按钮。
     // 无 url 按钮点击会触发卡片回调，自定义机器人未配置回调地址就会报错。
