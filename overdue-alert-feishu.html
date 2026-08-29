@@ -842,12 +842,12 @@ function quickSetWebhook(){
         <input id="cfg_wh" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${wh}" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx"></div>
 
         <div style="margin-bottom:12px"><b>② 风神看板/明细页面 URL 模板（可选，推荐）</b><br>
-        <span style="color:#888;font-size:12px;line-height:1.6">
-        在看板上选好一个门店筛选后，复制浏览器地址栏链接粘到这里。<b>50个门店只需1个模板</b>，把链接里的门店值换成占位符：<br>
-        · 看板按<b>门店名</b>筛选 → 用 <code>{store}</code>，例：<code>https://看板/xxx?dept={store}</code><br>
-        · 看板按<b>门店ID</b>筛选 → 用 <code>{storeId}</code>，并在下方⑤填门店名↔ID对照表<br>
-        · 日期可加 <code>{date}</code>（自动填当天，YYYY-MM-DD）</span><br>
-        <input id="cfg_du" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${du}" placeholder="https://fengshen.xxx.com/dashboard/123?store={store}&date={date}"></div>
+        <span style="color:#888;font-size:12px;line-height:1.7">
+        卡片「📋 查看完整明细」按钮的跳转地址。<b>请填不带 <code>id=</code> 参数的通用链接</b>，50家店共用1条，例如：<br>
+        <code style="word-break:break-all;display:block;background:#f5f6f7;padding:4px 6px;border-radius:4px;margin-top:2px">https://data.bytedance.net/aeolus/pages/dataQuery?appId=36&rid=18022193&sid=5022408</code>
+        ⚠️ 风神 dataQuery 筛选后URL里的 <code>id=1787...</code> 是<b>每次查询生成的临时快照</b>（同一家店每次都变、会过期），<b>不要</b>填进模板或对照表。负责人点开通用链接后在页面里选自己门店即可；卡片正文已展示本店TOP10。<br>
+        支持占位符：<code>{store}</code>=门店名、<code>{date}</code>=当天（若你们其他系统支持URL筛选时可用）。</span><br>
+        <input id="cfg_du" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${du}" placeholder="https://data.bytedance.net/aeolus/pages/dataQuery?appId=36&rid=18022193&sid=5022408"></div>
 
         <div style="margin-bottom:12px"><b>③ CSV下载 URL 模板（可选）</b><br>
         <span style="color:#888;font-size:12px;line-height:1.6">若看板/系统支持直接导出CSV，把导出链接填这里。占位符同②（<code>{store}</code>/<code>{storeId}</code>/<code>{date}</code>）。<br>不填则卡片用文字提示去工具页面下载，不会报错。</span><br>
@@ -857,13 +857,10 @@ function quickSetWebhook(){
         <span style="color:#888;font-size:12px">占位符：<code>{store}</code>、<code>{storeId}</code>、<code>{manager}</code>；不填则卡片提示在群内回复"已知悉"。</span><br>
         <input id="cfg_au" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${au}" placeholder="https://xxx/ack?store={storeId}"></div>
 
-        <div style="margin-bottom:8px"><b>⑤ 门店 ↔ 风神链接/门店ID 对照表（二选一填写）</b><br>
-        <span style="color:#888;font-size:12px;line-height:1.7">每行一家店，两种写法：<br>
-        · <b>写法A（每店一条完整链接）</b>：<code>佛山店=https://data.bytedance.net/...&id=178798...&rid=...&sid=...</code><br>
-        　 适合风神筛选后生成固定快照链接的情况，直接把该门店筛选后的完整地址粘到等号后。<br>
-        · <b>写法B（门店ID）</b>：<code>佛山店=1787983009005220</code>，配合②模板里的 <code>{storeId}</code> 用。<br>
-        支持 <code>=</code>/逗号/Tab 分隔，#开头为注释；没配的门店回退用门店名。</span><br>
-        <textarea id="cfg_smap" rows="5" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px;font-family:monospace" placeholder="佛山店=https://data.bytedance.net/aeolus/pages/dataQuery?appId=36&id=1787983009005220&rid=18022193&sid=5022408&#10;广州店=（广州店筛选后的完整链接）&#10;# 或写法B：佛山店=1787983009005220">${smapText}</textarea></div>
+        <div style="margin-bottom:8px"><b>⑤ 门店 ↔ 链接/门店ID 对照表（一般不用填）</b><br>
+        <span style="color:#888;font-size:12px;line-height:1.7">仅当你们的系统<b>支持按门店固定ID/固定链接筛选</b>时才需要。每行 <code>门店名=门店ID</code> 或 <code>门店名=完整http链接</code>，配合②的 <code>{storeId}</code> 使用。<br>
+        <b style="color:#f54a45">注意：风神 dataQuery 筛选后的链接不要填这里</b>——它的 <code>id=1787...</code> 是每次查询的临时快照，同一门店每次都变，填了会失效。#开头为注释。</span><br>
+        <textarea id="cfg_smap" rows="4" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px;font-family:monospace" placeholder="# 示例（仅固定链接/固定ID系统适用）：&#10;佛山店=8801&#10;某店=https://其他系统.com/detail?store=8801">${smapText}</textarea></div>
     </div>`;
     const div=document.createElement('div');
     div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
