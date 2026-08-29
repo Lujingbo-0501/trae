@@ -725,7 +725,7 @@ function renderPreview(name,g){
     const escName=name.replace(/'/g,"\\'");
     const buttons=[
         hasDetailUrl
-            ? `<button class="feishu-btn" onclick="openDetailUrl('${escName}')">📋 查看完整明细（打开风神看板）</button>`
+            ? `<button class="feishu-btn" onclick="openDetailUrl('${escName}')">📋 查看本店完整明细（风神看板）</button>`
             : `<button class="feishu-btn" onclick="scrollToDetail()">📋 滚到底部看完整明细</button>`,
         `<button class="feishu-btn secondary" onclick="exportCurrentStoreCSV('${escName}')">📄 下载全店明细CSV</button>`,
         ackUrl?`<button class="feishu-btn secondary" onclick="markPreviewAck()">✅ 已知悉并处理</button>`:'<button class="feishu-btn secondary" onclick="markPreviewAck()">💡 群内回复确认</button>'
@@ -768,7 +768,9 @@ function renderDetailTable(){
 function markHandled(vin){alert('已标记 '+vin+' 为处理中\n真实场景下会回写Hive/业务系统，关闭预警，并记录处理人/时间。');}
 
 function getWebhook(){try{return localStorage.getItem('feishu_webhook')||'';}catch(e){return '';}}
-function getDetailUrl(){try{return localStorage.getItem('detail_url')||'';}catch(e){return '';}}
+// 风神超期明细看板（已配置行级别权限：同一链接，各门店负责人凭登录身份只看到本店数据）
+const DEFAULT_DETAIL_URL='https://data.bytedance.net/aeolus/pages/dataQuery?appId=36&dashboardId=1934002&isDefault=1&reportQuerySchemaKey=77f53f07-099f-43f8-87c6-ee372018f291&rid=18363302&sid=6066270&waitForDataReady=0';
+function getDetailUrl(){try{return localStorage.getItem('detail_url')||DEFAULT_DETAIL_URL;}catch(e){return DEFAULT_DETAIL_URL;}}
 function getDownloadUrl(){try{return localStorage.getItem('download_url')||'';}catch(e){return '';}}
 function getAckUrl(){try{return localStorage.getItem('ack_url')||'';}catch(e){return '';}}
 function setWebhook(url){try{localStorage.setItem('feishu_webhook',url);}catch(e){}updateWebhookStatus();}
@@ -841,13 +843,11 @@ function quickSetWebhook(){
         <span style="color:#888;font-size:12px">飞书群→群设置→群机器人→添加"自定义机器人"→复制Webhook</span><br>
         <input id="cfg_wh" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${wh}" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx"></div>
 
-        <div style="margin-bottom:12px"><b>② 风神看板/明细页面 URL 模板（可选，推荐）</b><br>
+        <div style="margin-bottom:12px"><b>② 风神看板/明细页面 URL（已默认填好，一般不用改）</b><br>
         <span style="color:#888;font-size:12px;line-height:1.7">
-        卡片「📋 查看完整明细」按钮的跳转地址。<b>请填不带 <code>id=</code> 参数的通用链接</b>，50家店共用1条，例如：<br>
-        <code style="word-break:break-all;display:block;background:#f5f6f7;padding:4px 6px;border-radius:4px;margin-top:2px">https://data.bytedance.net/aeolus/pages/dataQuery?appId=36&rid=18022193&sid=5022408</code>
-        ⚠️ 风神 dataQuery 筛选后URL里的 <code>id=1787...</code> 是<b>每次查询生成的临时快照</b>（同一家店每次都变、会过期），<b>不要</b>填进模板或对照表。负责人点开通用链接后在页面里选自己门店即可；卡片正文已展示本店TOP10。<br>
-        支持占位符：<code>{store}</code>=门店名、<code>{date}</code>=当天（若你们其他系统支持URL筛选时可用）。</span><br>
-        <input id="cfg_du" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${du}" placeholder="https://data.bytedance.net/aeolus/pages/dataQuery?appId=36&rid=18022193&sid=5022408"></div>
+        卡片底部「📋 查看本店完整明细」按钮的跳转地址。<b>当前默认链接是已配置<b>行级别权限</b>的风神看板</b>：50家店共用这1条链接，各门店负责人凭登录身份打开后，风神服务端自动只展示他自己门店的数据，<b>无需门店映射、无需50个链接</b>。<br>
+        ⚠️ 注意：请保持链接为 <code>dashboardId=1934002</code> 这种固定分享链接；<b>不要</b>用 dataQuery 筛选后生成的带 <code>id=1787...</code> 的临时快照链接（会变、会过期）。</span><br>
+        <input id="cfg_du" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${du}"></div>
 
         <div style="margin-bottom:12px"><b>③ CSV下载 URL 模板（可选）</b><br>
         <span style="color:#888;font-size:12px;line-height:1.6">若看板/系统支持直接导出CSV，把导出链接填这里。占位符同②（<code>{store}</code>/<code>{storeId}</code>/<code>{date}</code>）。<br>不填则卡片用文字提示去工具页面下载，不会报错。</span><br>
@@ -1012,13 +1012,13 @@ function buildCardActions(storeName,managerName){
     const ackUrl=getAckUrl();
     const map=getStoreMap();
     const hasStoreLink=typeof map[storeName]==='string' && /^https?:\/\//i.test(map[storeName].trim());
-    // 1. 下载按钮（有 downloadUrl 或门店专属链接时才显示）
+    // 1. 下载按钮（有 downloadUrl 时显示）
     if(downloadUrl){
-        actions.push({tag:'button',text:{tag:'plain_text',content:'📄 下载全店明细CSV'},type:'primary',url:getStoreUrl('download',storeName,managerName)});
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📄 下载全店明细CSV'},type:'default',url:getStoreUrl('download',storeName,managerName)});
     }
-    // 2. 查看完整明细（风神看板）：②配置了模板，或⑤给了该门店专属完整链接
+    // 2. 查看完整明细（风神看板，行级权限自动过滤本店数据）：②配置了模板，或⑤给了该门店专属完整链接
     if(detailUrl||hasStoreLink){
-        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看完整明细'},type:'default',url:getStoreUrl('detail',storeName,managerName)});
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看本店完整明细（风神看板）'},type:'primary',url:getStoreUrl('detail',storeName,managerName)});
     }
     // 3. 已知悉/确认
     if(ackUrl){
