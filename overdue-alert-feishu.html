@@ -698,11 +698,13 @@ function renderPreview(name,g){
     const today=new Date().toLocaleDateString('zh-CN');
     const stageBars=Object.keys(stageMap).length?Object.entries(stageMap).sort((a,b)=>b[1]-a[1]).map(([s,c])=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px"><span style="width:80px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s}</span><div style="flex:1;height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden"><div style="width:${c/mx*100}%;height:100%;background:#3370ff;border-radius:3px"></div></div><span style="width:30px;text-align:right;color:#333">${c}台</span></div>`).join(''):'';
     const headerColor=p0>0?'linear-gradient(90deg,#f54a45 0%,#ff7d00 100%)':'linear-gradient(90deg,#ff7d00 0%,#faad14 100%)';
-    const detailUrl=getDetailUrl();
-    const hasDetailUrl=!!detailUrl;
+    const _map=getStoreMap();
+    const _storeLink=_map[name];
+    const hasStoreLink=typeof _storeLink==='string' && /^https?:\/\//i.test(_storeLink.trim());
+    const hasDetailUrl=!!getDetailUrl()||hasStoreLink;
     const ackUrl=getAckUrl();
     let detailBlock='';
-    if(!hasDetailUrl && over.length){
+    if(over.length){
         const show=over.slice(0,6);
         detailBlock=`<div style="margin-bottom:12px">
             <div style="font-size:13px;font-weight:500;color:#333;margin-bottom:6px">📋 超期明细预览（显示TOP ${show.length} / 共${over.length}台 · 按超期天数排序）</div>
@@ -805,6 +807,21 @@ function resolveUrlTemplate(tpl,storeName,managerName){
         .replace(/\{manager\}/g,encodeURIComponent(managerName||''))
         .replace(/\{date\}/g,today);
 }
+// 明细表/下载/确认的最终URL：
+// 若⑤对照表里该门店配的是一条完整http链接（风神按门店筛选后的分享链接），优先用它；
+// 否则用②/③/④的URL模板 + {store}/{storeId} 占位符生成。
+function getStoreUrl(kind,storeName,managerName){
+    const map=getStoreMap();
+    const v=map[storeName];
+    if(typeof v==='string' && /^https?:\/\//i.test(v.trim())){
+        const today=new Date().toISOString().slice(0,10);
+        return v.trim().replace(/\{date\}/g,today);
+    }
+    const tpl = kind==='detail'?getDetailUrl()
+              : kind==='download'?getDownloadUrl()
+              : getAckUrl();
+    return resolveUrlTemplate(tpl,storeName,managerName);
+}
 function updateWebhookStatus(){
     const wh=getWebhook();
     const btn=document.getElementById('webhookStatusBtn');
@@ -840,9 +857,13 @@ function quickSetWebhook(){
         <span style="color:#888;font-size:12px">占位符：<code>{store}</code>、<code>{storeId}</code>、<code>{manager}</code>；不填则卡片提示在群内回复"已知悉"。</span><br>
         <input id="cfg_au" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px" value="${au}" placeholder="https://xxx/ack?store={storeId}"></div>
 
-        <div style="margin-bottom:8px"><b>⑤ 门店名 ↔ 看板门店ID 对照表（仅看板按ID筛选时需要）</b><br>
-        <span style="color:#888;font-size:12px;line-height:1.6">每行一家店，格式 <code>门店名=门店ID</code>（也支持逗号/制表符分隔）。<b>没配的门店会自动回退用门店名</b>。#开头为注释。</span><br>
-        <textarea id="cfg_smap" rows="5" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px;font-family:monospace" placeholder="朝阳店=8801&#10;海淀店=8802&#10;浦东店=8803&#10;# 这是注释行">${smapText}</textarea></div>
+        <div style="margin-bottom:8px"><b>⑤ 门店 ↔ 风神链接/门店ID 对照表（二选一填写）</b><br>
+        <span style="color:#888;font-size:12px;line-height:1.7">每行一家店，两种写法：<br>
+        · <b>写法A（每店一条完整链接）</b>：<code>佛山店=https://data.bytedance.net/...&id=178798...&rid=...&sid=...</code><br>
+        　 适合风神筛选后生成固定快照链接的情况，直接把该门店筛选后的完整地址粘到等号后。<br>
+        · <b>写法B（门店ID）</b>：<code>佛山店=1787983009005220</code>，配合②模板里的 <code>{storeId}</code> 用。<br>
+        支持 <code>=</code>/逗号/Tab 分隔，#开头为注释；没配的门店回退用门店名。</span><br>
+        <textarea id="cfg_smap" rows="5" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:12px;font-family:monospace" placeholder="佛山店=https://data.bytedance.net/aeolus/pages/dataQuery?appId=36&id=1787983009005220&rid=18022193&sid=5022408&#10;广州店=（广州店筛选后的完整链接）&#10;# 或写法B：佛山店=1787983009005220">${smapText}</textarea></div>
     </div>`;
     const div=document.createElement('div');
     div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
@@ -885,9 +906,10 @@ function scrollToDetail(){
 }
 function openDetailUrl(storeName){
     const name=storeName||currentStore;
-    const tpl=getDetailUrl();
-    if(!tpl){alert('还没有配置看板URL模板，请点「⚙️ 配置飞书推送」在②里填写。');quickSetWebhook();return;}
-    const url=resolveUrlTemplate(tpl,name,storeGroups[name]?storeGroups[name].manager:'');
+    const map=getStoreMap();
+    const hasStoreLink=typeof map[name]==='string' && /^https?:\/\//i.test(map[name].trim());
+    if(!getDetailUrl() && !hasStoreLink){alert('还没有配置看板链接：请点「⚙️ 配置飞书推送」，在②填URL模板，或在⑤给本门店配完整风神链接。');quickSetWebhook();return;}
+    const url=getStoreUrl('detail',name,storeGroups[name]?storeGroups[name].manager:'');
     console.log('明细链接：',url);
     window.open(url,'_blank');
 }
@@ -991,17 +1013,19 @@ function buildCardActions(storeName,managerName){
     const detailUrl=getDetailUrl();
     const downloadUrl=getDownloadUrl();
     const ackUrl=getAckUrl();
-    // 1. 下载按钮（有 downloadUrl 才显示）
+    const map=getStoreMap();
+    const hasStoreLink=typeof map[storeName]==='string' && /^https?:\/\//i.test(map[storeName].trim());
+    // 1. 下载按钮（有 downloadUrl 或门店专属链接时才显示）
     if(downloadUrl){
-        actions.push({tag:'button',text:{tag:'plain_text',content:'📄 下载全店明细CSV'},type:'primary',url:resolveUrlTemplate(downloadUrl,storeName,managerName)});
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📄 下载全店明细CSV'},type:'primary',url:getStoreUrl('download',storeName,managerName)});
     }
-    // 2. 查看完整明细（风神看板）
-    if(detailUrl){
-        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看完整明细'},type:'default',url:resolveUrlTemplate(detailUrl,storeName,managerName)});
+    // 2. 查看完整明细（风神看板）：②配置了模板，或⑤给了该门店专属完整链接
+    if(detailUrl||hasStoreLink){
+        actions.push({tag:'button',text:{tag:'plain_text',content:'📋 查看完整明细'},type:'default',url:getStoreUrl('detail',storeName,managerName)});
     }
     // 3. 已知悉/确认
     if(ackUrl){
-        actions.push({tag:'button',text:{tag:'plain_text',content:'✅ 已知悉并处理'},type:'default',url:resolveUrlTemplate(ackUrl,storeName,managerName)});
+        actions.push({tag:'button',text:{tag:'plain_text',content:'✅ 已知悉并处理'},type:'default',url:getStoreUrl('ack',storeName,managerName)});
     }
     // 注意：此处不再添加任何无 url 的兜底按钮。
     // 无 url 按钮点击会触发卡片回调，自定义机器人未配置回调地址就会报错。
